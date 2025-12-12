@@ -606,6 +606,10 @@ async function handleProjectChange() {
         await loadSchemas();
         await loadProjectMembers();
         
+        // Re-renderizar con restricciones de rol aplicadas
+        renderSavedSchemas();
+        renderProperties();
+        
         // Subscribe to realtime
         subscribeToSchemas();
         
@@ -1170,6 +1174,13 @@ function loadSchema(schemaId) {
 }
 
 async function deleteSchema(schemaId) {
+    // Verificar permisos
+    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
+    if (!canEdit) {
+        showToast('No tienes permisos para eliminar schemas', 'error');
+        return;
+    }
+    
     const schema = state.savedSchemas.find(s => s.id === schemaId);
     if (!schema) return;
     
@@ -1206,6 +1217,8 @@ function renderSavedSchemas() {
         return;
     }
     
+    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
+    
     let html = '';
     state.savedSchemas.forEach(function(schema) {
         const propCount = Object.keys(schema.properties || {}).length;
@@ -1223,7 +1236,9 @@ function renderSavedSchemas() {
         html += '</div>';
         html += '<div class="schema-actions">';
         html += '<button class="btn btn-secondary btn-icon" onclick="loadSchema(\'' + schema.id + '\')" title="Cargar">📂</button>';
-        html += '<button class="btn btn-danger btn-icon" onclick="deleteSchema(\'' + schema.id + '\')" title="Eliminar">🗑️</button>';
+        if (canEdit) {
+            html += '<button class="btn btn-danger btn-icon" onclick="deleteSchema(\'' + schema.id + '\')" title="Eliminar">🗑️</button>';
+        }
         html += '</div>';
         html += '</div>';
     });
