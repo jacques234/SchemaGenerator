@@ -9,6 +9,7 @@ const supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KE
 const state = {
     user: null,
     currentProject: null,
+    userRole: null,  // 'owner', 'editor', o 'viewer'
     properties: [],
     savedSchemas: [],
     editIndex: -1,
@@ -467,9 +468,15 @@ async function handleLogout() {
         await supabaseClient.auth.signOut();
         state.user = null;
         state.currentProject = null;
+        state.userRole = null;
         state.savedSchemas = [];
+        state.properties = [];
+        
+        // Mostrar pantalla de login
+        showLoginUI();
         showToast('Sesión cerrada');
     } catch (error) {
+        console.error('Error logout:', error);
         showToast('Error al cerrar sesión', 'error');
     }
     
@@ -580,7 +587,12 @@ async function handleProjectChange() {
         if (error) throw error;
         
         state.currentProject = project;
+        
+        // Determinar rol del usuario en este proyecto
+        await determineUserRole(projectId);
+        
         showProjectSections();
+        applyRoleRestrictions();
         
         // Update project info
         if (elements.projectName) {
@@ -618,6 +630,58 @@ function hideProjectSections() {
     if (elements.propertiesSection) elements.propertiesSection.style.display = 'none';
     if (elements.outputSection) elements.outputSection.style.display = 'none';
     if (elements.projectInfo) elements.projectInfo.style.display = 'none';
+}
+
+async function determineUserRole(projectId) {
+    if (!state.user || !state.currentProject) {
+        state.userRole = null;
+        return;
+    }
+    
+    // Si es el owner del proyecto
+    if (state.currentProject.owner_id === state.user.id) {
+        state.userRole = 'owner';
+        return;
+    }
+    
+    // Buscar en project_members
+    try {
+        const { data, error } = await supabaseClient
+            .from('project_members')
+            .select('role')
+            .eq('project_id', projectId)
+            .eq('user_id', state.user.id)
+            .single();
+        
+        if (error) {
+            state.userRole = 'viewer'; // Por defecto viewer si hay error
+        } else {
+            state.userRole = data.role || 'viewer';
+        }
+    } catch (err) {
+        state.userRole = 'viewer';
+    }
+}
+
+function applyRoleRestrictions() {
+    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
+    
+    // Botones de guardar y agregar
+    if (elements.saveSchemaBtn) {
+        elements.saveSchemaBtn.style.display = canEdit ? 'inline-flex' : 'none';
+    }
+    if (elements.addPropertyBtn) {
+        elements.addPropertyBtn.style.display = canEdit ? 'inline-flex' : 'none';
+    }
+    if (elements.inviteMemberBtn) {
+        // Solo owner puede invitar
+        elements.inviteMemberBtn.style.display = state.userRole === 'owner' ? 'inline-flex' : 'none';
+    }
+    
+    // Mostrar indicador de rol si es viewer
+    if (state.userRole === 'viewer') {
+        showToast('Modo solo lectura (Viewer)', 'info');
+    }
 }
 
 function openProjectModal() {
@@ -1398,6 +1462,8 @@ function renderProperties() {
         return;
     }
     
+    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
+    
     let html = '';
     state.properties.forEach(function(prop, index) {
         html += '<div class="property-card" data-index="' + index + '">';
@@ -1418,10 +1484,12 @@ function renderProperties() {
         if (prop.Relation) html += '<span class="badge relation">Reference</span>';
         html += '</div>';
         html += '</div>';
-        html += '<div class="property-actions">';
-        html += '<button class="btn btn-secondary btn-icon" onclick="editProperty(' + index + ')" title="Editar">✏️</button>';
-        html += '<button class="btn btn-danger btn-icon" onclick="deleteProperty(' + index + ')" title="Eliminar">🗑️</button>';
-        html += '</div>';
+        if (canEdit) {
+            html += '<div class="property-actions">';
+            html += '<button class="btn btn-secondary btn-icon" onclick="editProperty(' + index + ')" title="Editar">✏️</button>';
+            html += '<button class="btn btn-danger btn-icon" onclick="deleteProperty(' + index + ')" title="Eliminar">🗑️</button>';
+            html += '</div>';
+        }
         html += '</div>';
     });
     
