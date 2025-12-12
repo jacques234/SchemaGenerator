@@ -1173,11 +1173,16 @@ function updateEntitySelectors() {
     
     const currentEntity = elements.entityName ? elements.entityName.value.trim() : '';
     
+    // Guardar valor actual antes de reconstruir
+    const currentExtendsValue = elements.extendsSelect.value;
+    const currentTargetValue = elements.relationTargetEntity.value;
+    
     // Update extends selector
     let extendsHtml = '<option value="">-- Seleccionar entidad --</option>';
     state.savedSchemas.forEach(function(schema) {
         if (schema.entity !== currentEntity) {
-            extendsHtml += '<option value="' + schema.entity + '">' + schema.entity + '</option>';
+            const selected = schema.entity === currentExtendsValue ? ' selected' : '';
+            extendsHtml += '<option value="' + schema.entity + '"' + selected + '>' + schema.entity + '</option>';
         }
     });
     elements.extendsSelect.innerHTML = extendsHtml;
@@ -1185,7 +1190,8 @@ function updateEntitySelectors() {
     // Update relation target entity selector
     let targetHtml = '<option value="">-- Seleccionar entidad --</option>';
     state.savedSchemas.forEach(function(schema) {
-        targetHtml += '<option value="' + schema.entity + '">' + schema.entity + '</option>';
+        const selected = schema.entity === currentTargetValue ? ' selected' : '';
+        targetHtml += '<option value="' + schema.entity + '"' + selected + '>' + schema.entity + '</option>';
     });
     elements.relationTargetEntity.innerHTML = targetHtml;
 }
