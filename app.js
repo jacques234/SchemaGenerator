@@ -103,6 +103,9 @@ function initializeElements() {
         savedEmptyState: document.getElementById('savedEmptyState'),
         saveSchemaBtn: document.getElementById('saveSchemaBtn'),
         newSchemaBtn: document.getElementById('newSchemaBtn'),
+        exportProjectBtn: document.getElementById('exportProjectBtn'),
+        importProjectBtn: document.getElementById('importProjectBtn'),
+        importFileInput: document.getElementById('importFileInput'),
         
         // Modal
         propertyModal: document.getElementById('propertyModal'),
@@ -266,6 +269,27 @@ function initializeEventListeners() {
     if (elements.newSchemaBtn) {
         elements.newSchemaBtn.addEventListener('click', function() {
             createNewSchema();
+        });
+    }
+    
+    // Export project button
+    if (elements.exportProjectBtn) {
+        elements.exportProjectBtn.addEventListener('click', function() {
+            exportProject();
+        });
+    }
+    
+    // Import project button
+    if (elements.importProjectBtn) {
+        elements.importProjectBtn.addEventListener('click', function() {
+            if (elements.importFileInput) elements.importFileInput.click();
+        });
+    }
+    
+    // Import file input change
+    if (elements.importFileInput) {
+        elements.importFileInput.addEventListener('change', function(e) {
+            handleImportFile(e);
         });
     }
     
@@ -679,6 +703,9 @@ function applyRoleRestrictions() {
     }
     if (elements.addPropertyBtn) {
         elements.addPropertyBtn.style.display = canEdit ? 'inline-flex' : 'none';
+    }
+    if (elements.importProjectBtn) {
+        elements.importProjectBtn.style.display = canEdit ? 'inline-flex' : 'none';
     }
     if (elements.inviteMemberBtn) {
         // Solo owner puede invitar
@@ -1247,6 +1274,152 @@ function renderSavedSchemas() {
     });
     
     elements.savedSchemasList.innerHTML = html;
+}
+
+// ===== Export Project =====
+function exportProject() {
+    if (!state.currentProject) {
+        showToast('Selecciona un proyecto primero', 'error');
+        return;
+    }
+    
+    if (state.savedSchemas.length === 0) {
+        showToast('No hay schemas para exportar', 'error');
+        return;
+    }
+    
+    // Crear objeto de exportación
+    const exportData = {
+        projectName: state.currentProject.name,
+        projectDescription: state.currentProject.description || '',
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+        schemas: state.savedSchemas.map(function(schema) {
+            return {
+                entity: schema.entity,
+                version: schema.version || 1,
+                mutable: schema.mutable !== false,
+                properties: schema.properties || {},
+                inheritance: schema.inheritance || { isBase: true }
+            };
+        })
+    };
+    
+    // Descargar archivo
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = state.currentProject.name.replace(/\s+/g, '_') + '_export.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('Proyecto exportado: ' + state.savedSchemas.length + ' schemas');
+}
+
+// ===== Import Project =====
+async function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Reset input para permitir reimportar el mismo archivo
+    e.target.value = '';
+    
+    if (!state.currentProject) {
+        showToast('Selecciona un proyecto primero', 'error');
+        return;
+    }
+    
+    // Verificar permisos
+    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
+    if (!canEdit) {
+        showToast('No tienes permisos para importar schemas', 'error');
+        return;
+    }
+    
+    try {
+        const text = await file.text();
+        const importData = JSON.parse(text);
+        
+        // Validar estructura
+        if (!importData.schemas || !Array.isArray(importData.schemas)) {
+            showToast('Archivo inválido: no contiene schemas', 'error');
+            return;
+        }
+        
+        if (importData.schemas.length === 0) {
+            showToast('El archivo no contiene schemas', 'error');
+            return;
+        }
+        
+        // Confirmar importación
+        const msg = '¿Importar ' + importData.schemas.length + ' schemas de "' + (importData.projectName || 'archivo') + '"?\n\nLos schemas existentes con el mismo nombre serán actualizados.';
+        if (!confirm(msg)) return;
+        
+        showLoading(true);
+        
+        let imported = 0;
+        let updated = 0;
+        let errors = 0;
+        
+        for (const schema of importData.schemas) {
+            try {
+                // Verificar si ya existe
+                const existing = state.savedSchemas.find(s => s.entity === schema.entity);
+                
+                const schemaData = {
+                    project_id: state.currentProject.id,
+                    entity: schema.entity,
+                    version: schema.version || 1,
+                    mutable: schema.mutable !== false,
+                    properties: schema.properties || {},
+                    inheritance: schema.inheritance || { isBase: true },
+                    updated_by: state.user.id
+                };
+                
+                if (existing) {
+                    // Update
+                    const { error } = await supabaseClient
+                        .from('schemas')
+                        .update(schemaData)
+                        .eq('id', existing.id);
+                    
+                    if (error) throw error;
+                    updated++;
+                } else {
+                    // Insert
+                    schemaData.created_by = state.user.id;
+                    
+                    const { error } = await supabaseClient
+                        .from('schemas')
+                        .insert(schemaData);
+                    
+                    if (error) throw error;
+                    imported++;
+                }
+            } catch (err) {
+                console.error('Error importing schema:', schema.entity, err);
+                errors++;
+            }
+        }
+        
+        await loadSchemas();
+        
+        let message = 'Importación completada: ';
+        if (imported > 0) message += imported + ' nuevos';
+        if (updated > 0) message += (imported > 0 ? ', ' : '') + updated + ' actualizados';
+        if (errors > 0) message += (imported > 0 || updated > 0 ? ', ' : '') + errors + ' errores';
+        
+        showToast(message);
+        
+    } catch (error) {
+        console.error('Error parsing import file:', error);
+        showToast('Error al leer archivo: formato inválido', 'error');
+    }
+    
+    showLoading(false);
 }
 
 // ===== Update Entity Selectors =====
