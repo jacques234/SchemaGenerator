@@ -77,6 +77,7 @@ function initializeElements() {
         
         // Sections
         schemasSection: document.getElementById('schemasSection'),
+        twoColumnLayout: document.querySelector('.two-column-layout'),
         entitySection: document.getElementById('entitySection'),
         propertiesSection: document.getElementById('propertiesSection'),
         outputSection: document.getElementById('outputSection'),
@@ -623,6 +624,7 @@ async function handleProjectChange() {
 
 function showProjectSections() {
     if (elements.schemasSection) elements.schemasSection.style.display = 'block';
+    if (elements.twoColumnLayout) elements.twoColumnLayout.style.display = 'grid';
     if (elements.entitySection) elements.entitySection.style.display = 'block';
     if (elements.propertiesSection) elements.propertiesSection.style.display = 'block';
     if (elements.outputSection) elements.outputSection.style.display = 'block';
@@ -630,6 +632,7 @@ function showProjectSections() {
 
 function hideProjectSections() {
     if (elements.schemasSection) elements.schemasSection.style.display = 'none';
+    if (elements.twoColumnLayout) elements.twoColumnLayout.style.display = 'none';
     if (elements.entitySection) elements.entitySection.style.display = 'none';
     if (elements.propertiesSection) elements.propertiesSection.style.display = 'none';
     if (elements.outputSection) elements.outputSection.style.display = 'none';

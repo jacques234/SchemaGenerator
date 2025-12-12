@@ -158,109 +158,119 @@
                 </div>
             </section>
 
-            <!-- Entity Configuration Panel -->
-            <section class="panel entity-panel" id="entitySection" style="display: none;">
-                <div class="panel-header">
-                    <h2>
-                        <span class="icon">⚙️</span>
-                        Configuración de Entidad
-                    </h2>
-                </div>
-                <div class="panel-body">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="entityName">Nombre de Entidad *</label>
-                            <input type="text" id="entityName" placeholder="ej: cat_tipo_personas" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="version">Versión</label>
-                            <input type="number" id="version" value="1" min="1">
-                        </div>
-                        <div class="form-group checkbox-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="mutable" checked>
-                                <span class="checkmark"></span>
-                                Mutable
-                            </label>
-                        </div>
-                    </div>
+            <!-- Two Column Layout -->
+            <div class="two-column-layout">
+                <!-- Left Column -->
+                <div class="column-left">
 
-                    <!-- Inheritance Section -->
-                    <div class="inheritance-section">
-                        <h3>Herencia</h3>
-                        <div class="form-grid">
-                            <div class="form-group checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="isBase" checked>
-                                    <span class="checkmark"></span>
-                                    Es Base
-                                </label>
+                    <!-- Entity Configuration Panel -->
+                    <section class="panel entity-panel" id="entitySection" style="display: none;">
+                        <div class="panel-header">
+                            <h2>
+                                <span class="icon">⚙️</span>
+                                Configuración de Entidad
+                            </h2>
+                        </div>
+                        <div class="panel-body">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="entityName">Nombre de Entidad *</label>
+                                    <input type="text" id="entityName" placeholder="ej: cat_tipo_personas" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="version">Versión</label>
+                                    <input type="number" id="version" value="1" min="1">
+                                </div>
+                                <div class="form-group checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="mutable" checked>
+                                        <span class="checkmark"></span>
+                                        Mutable
+                                    </label>
+                                </div>
                             </div>
-                            <div class="form-group extends-fields" style="display: none;">
-                                <label for="extendsSelect">Extiende de</label>
-                                <select id="extendsSelect">
-                                    <option value="">-- Seleccionar entidad --</option>
-                                </select>
-                            </div>
-                            <div class="form-group extends-fields" style="display: none;">
-                                <label for="strategy">Estrategia</label>
-                                <select id="strategy">
-                                    <option value="override">Override</option>
-                                    <option value="merge">Merge</option>
-                                    <option value="replace">Replace</option>
-                                </select>
+
+                            <!-- Inheritance Section -->
+                            <div class="inheritance-section">
+                                <h3>Herencia</h3>
+                                <div class="form-grid">
+                                    <div class="form-group checkbox-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="isBase" checked>
+                                            <span class="checkmark"></span>
+                                            Es Base
+                                        </label>
+                                    </div>
+                                    <div class="form-group extends-fields" style="display: none;">
+                                        <label for="extendsSelect">Extiende de</label>
+                                        <select id="extendsSelect">
+                                            <option value="">-- Seleccionar entidad --</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group extends-fields" style="display: none;">
+                                        <label for="strategy">Estrategia</label>
+                                        <select id="strategy">
+                                            <option value="override">Override</option>
+                                            <option value="merge">Merge</option>
+                                            <option value="replace">Replace</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </section>
+                    </section>
 
-            <!-- Properties Section -->
-            <section class="panel properties-panel" id="propertiesSection" style="display: none;">
-                <div class="panel-header">
-                    <h2>
-                        <span class="icon">📋</span>
-                        Propiedades
-                    </h2>
-                    <button class="btn btn-primary" id="addPropertyBtn">
-                        <span>+</span> Agregar Propiedad
-                    </button>
-                </div>
-                <div class="panel-body">
-                    <div id="propertiesList" class="properties-list">
-                        <div class="empty-state" id="emptyState">
-                            <div class="empty-icon">📭</div>
-                            <p>No hay propiedades definidas</p>
-                            <small>Haz clic en "Agregar Propiedad" para comenzar</small>
+                    <!-- Properties Section -->
+                    <section class="panel properties-panel" id="propertiesSection" style="display: none;">
+                        <div class="panel-header">
+                            <h2>
+                                <span class="icon">📋</span>
+                                Propiedades
+                            </h2>
+                            <button class="btn btn-primary" id="addPropertyBtn">
+                                <span>+</span> Agregar Propiedad
+                            </button>
                         </div>
-                    </div>
+                        <div class="panel-body">
+                            <div id="propertiesList" class="properties-list">
+                                <div class="empty-state" id="emptyState">
+                                    <div class="empty-icon">📭</div>
+                                    <p>No hay propiedades definidas</p>
+                                    <small>Haz clic en "Agregar Propiedad" para comenzar</small>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-            </section>
 
-            <!-- Output Section -->
-            <section class="panel output-panel" id="outputSection" style="display: none;">
-                <div class="panel-header">
-                    <h2>
-                        <span class="icon">📄</span>
-                        JSON Generado
-                    </h2>
-                    <div class="header-actions">
-                        <button class="btn btn-secondary" id="copyBtn">
-                            <span>📋</span> Copiar
-                        </button>
-                        <button class="btn btn-secondary" id="downloadBtn">
-                            <span>⬇️</span> Descargar
-                        </button>
-                        <button class="btn btn-accent" id="generateBtn">
-                            <span>🔄</span> Generar
-                        </button>
-                    </div>
+                <!-- Right Column -->
+                <div class="column-right">
+                    <!-- Output Section -->
+                    <section class="panel output-panel" id="outputSection" style="display: none;">
+                        <div class="panel-header">
+                            <h2>
+                                <span class="icon">📄</span>
+                                JSON Generado
+                            </h2>
+                            <div class="header-actions">
+                                <button class="btn btn-secondary" id="copyBtn">
+                                    <span>📋</span> Copiar
+                                </button>
+                                <button class="btn btn-secondary" id="downloadBtn">
+                                    <span>⬇️</span> Descargar
+                                </button>
+                                <button class="btn btn-accent" id="generateBtn">
+                                    <span>🔄</span> Generar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <pre id="jsonOutput"
+                                class="json-output"><code>{ "message": "Configure la entidad y agregue propiedades para generar el schema" }</code></pre>
+                        </div>
+                    </section>
                 </div>
-                <div class="panel-body">
-                    <pre id="jsonOutput"
-                        class="json-output"><code>{ "message": "Configure la entidad y agregue propiedades para generar el schema" }</code></pre>
-                </div>
-            </section>
+            </div>
         </main>
 
         <!-- Property Modal -->

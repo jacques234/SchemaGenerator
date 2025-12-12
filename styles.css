@@ -127,6 +127,48 @@ body::before {
     font-weight: 400;
 }
 
+/* ===== Two Column Layout ===== */
+.two-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.column-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.column-right {
+    position: sticky;
+    top: 2rem;
+}
+
+.column-right .output-panel {
+    margin-bottom: 0;
+}
+
+.column-right .json-output {
+    max-height: calc(100vh - 200px);
+    min-height: 400px;
+}
+
+@media (max-width: 1200px) {
+    .two-column-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .column-right {
+        position: static;
+    }
+
+    .column-right .json-output {
+        max-height: 500px;
+    }
+}
+
 /* ===== Panels ===== */
 .panel {
     background: var(--bg-card);
