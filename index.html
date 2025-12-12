@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schema Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                        <path d="M2 17l10 5 10-5" />
+                        <path d="M2 12l10 5 10-5" />
+                    </svg>
+                </div>
+                <h1>Schema Generator</h1>
+            </div>
+            <p class="subtitle">Generador de JSON Schemas para entidades</p>
+
+            <!-- User Info (shown when logged in) -->
+            <div class="user-section" id="userSection" style="display: none;">
+                <div class="user-info">
+                    <span class="user-email" id="userEmail"></span>
+                    <button class="btn btn-secondary btn-sm" id="logoutBtn">Cerrar Sesión</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Auth Section (shown when not logged in) -->
+        <section class="auth-section" id="authSection">
+            <div class="auth-card">
+                <h2>🔐 Iniciar Sesión</h2>
+                <p>Inicia sesión para colaborar en proyectos</p>
+
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">Iniciar Sesión</button>
+                    <button class="auth-tab" data-tab="register">Registrarse</button>
+                </div>
+
+                <form id="loginForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" placeholder="tu@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Contraseña</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Iniciar Sesión</button>
+                </form>
+
+                <form id="registerForm" class="auth-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" placeholder="tu@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Contraseña</label>
+                        <input type="password" id="registerPassword" placeholder="••••••••" minlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPasswordConfirm">Confirmar Contraseña</label>
+                        <input type="password" id="registerPasswordConfirm" placeholder="••••••••" minlength="6"
+                            required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Registrarse</button>
+                </form>
+
+                <div class="auth-divider">
+                    <span>o</span>
+                </div>
+
+                <button class="btn btn-google" id="googleLoginBtn">
+                    <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path fill="#4285F4"
+                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853"
+                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05"
+                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                        <path fill="#EA4335"
+                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    Continuar con Google
+                </button>
+
+                <div class="auth-error" id="authError" style="display: none;"></div>
+            </div>
+        </section>
+
+        <!-- Main Content (shown when logged in) -->
+        <main class="main-content" id="mainContent" style="display: none;">
+
+            <!-- Project Selector -->
+            <section class="panel project-panel">
+                <div class="panel-header">
+                    <h2>
+                        <span class="icon">📁</span>
+                        Proyecto
+                    </h2>
+                    <div class="header-actions">
+                        <select id="projectSelect" class="project-select">
+                            <option value="">-- Seleccionar Proyecto --</option>
+                        </select>
+                        <button class="btn btn-primary" id="newProjectBtn">
+                            <span>➕</span> Nuevo Proyecto
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body project-info" id="projectInfo" style="display: none;">
+                    <div class="project-details">
+                        <span id="projectName"></span>
+                        <button class="btn btn-secondary btn-sm" id="inviteMemberBtn">
+                            <span>👥</span> Invitar Miembro
+                        </button>
+                    </div>
+                    <div class="project-members-list" id="projectMembersList"></div>
+                    <div class="sync-status" id="syncStatus">
+                        <span class="sync-indicator synced"></span>
+                        <span>Sincronizado</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Saved Schemas Panel -->
+            <section class="panel saved-schemas-panel" id="schemasSection" style="display: none;">
+                <div class="panel-header">
+                    <h2>
+                        <span class="icon">💾</span>
+                        Schemas del Proyecto
+                    </h2>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" id="saveSchemaBtn">
+                            <span>💾</span> Guardar Schema Actual
+                        </button>
+                        <button class="btn btn-secondary" id="newSchemaBtn">
+                            <span>➕</span> Nuevo Schema
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div id="savedSchemasList" class="saved-schemas-list">
+                        <div class="empty-state" id="savedEmptyState">
+                            <p>No hay schemas en este proyecto</p>
+                            <small>Crea un schema para empezar</small>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Entity Configuration Panel -->
+            <section class="panel entity-panel" id="entitySection" style="display: none;">
+                <div class="panel-header">
+                    <h2>
+                        <span class="icon">⚙️</span>
+                        Configuración de Entidad
+                    </h2>
+                </div>
+                <div class="panel-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="entityName">Nombre de Entidad *</label>
+                            <input type="text" id="entityName" placeholder="ej: cat_tipo_personas" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="version">Versión</label>
+                            <input type="number" id="version" value="1" min="1">
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="mutable" checked>
+                                <span class="checkmark"></span>
+                                Mutable
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Inheritance Section -->
+                    <div class="inheritance-section">
+                        <h3>Herencia</h3>
+                        <div class="form-grid">
+                            <div class="form-group checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="isBase" checked>
+                                    <span class="checkmark"></span>
+                                    Es Base
+                                </label>
+                            </div>
+                            <div class="form-group extends-fields" style="display: none;">
+                                <label for="extendsSelect">Extiende de</label>
+                                <select id="extendsSelect">
+                                    <option value="">-- Seleccionar entidad --</option>
+                                </select>
+                            </div>
+                            <div class="form-group extends-fields" style="display: none;">
+                                <label for="strategy">Estrategia</label>
+                                <select id="strategy">
+                                    <option value="override">Override</option>
+                                    <option value="merge">Merge</option>
+                                    <option value="replace">Replace</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Properties Section -->
+            <section class="panel properties-panel" id="propertiesSection" style="display: none;">
+                <div class="panel-header">
+                    <h2>
+                        <span class="icon">📋</span>
+                        Propiedades
+                    </h2>
+                    <button class="btn btn-primary" id="addPropertyBtn">
+                        <span>+</span> Agregar Propiedad
+                    </button>
+                </div>
+                <div class="panel-body">
+                    <div id="propertiesList" class="properties-list">
+                        <div class="empty-state" id="emptyState">
+                            <div class="empty-icon">📭</div>
+                            <p>No hay propiedades definidas</p>
+                            <small>Haz clic en "Agregar Propiedad" para comenzar</small>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Output Section -->
+            <section class="panel output-panel" id="outputSection" style="display: none;">
+                <div class="panel-header">
+                    <h2>
+                        <span class="icon">📄</span>
+                        JSON Generado
+                    </h2>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" id="copyBtn">
+                            <span>📋</span> Copiar
+                        </button>
+                        <button class="btn btn-secondary" id="downloadBtn">
+                            <span>⬇️</span> Descargar
+                        </button>
+                        <button class="btn btn-accent" id="generateBtn">
+                            <span>🔄</span> Generar
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <pre id="jsonOutput"
+                        class="json-output"><code>{ "message": "Configure la entidad y agregue propiedades para generar el schema" }</code></pre>
+                </div>
+            </section>
+        </main>
+
+        <!-- Property Modal -->
+        <div class="modal-overlay" id="propertyModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Agregar Propiedad</h3>
+                    <button class="close-btn" id="closeModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="propertyForm">
+                        <input type="hidden" id="editIndex" value="-1">
+
+                        <div class="form-section">
+                            <h4>Información Básica</h4>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="propKey">Clave (key) *</label>
+                                    <input type="text" id="propKey" placeholder="ej: codigo" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="propName">Nombre *</label>
+                                    <input type="text" id="propName" placeholder="ej: Código" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="propType">Tipo *</label>
+                                    <select id="propType" required>
+                                        <option value="string">string</option>
+                                        <option value="number">number</option>
+                                        <option value="boolean">boolean</option>
+                                        <option value="date">date</option>
+                                        <option value="datetime">datetime</option>
+                                        <option value="array">array</option>
+                                        <option value="object">object</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="propOrder">Orden</label>
+                                    <input type="number" id="propOrder" value="1" min="1">
+                                </div>
+                                <div class="form-group checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="propIsReference">
+                                        <span class="checkmark"></span>
+                                        Es Referencia (FK)
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="propDescription">Descripción</label>
+                                <textarea id="propDescription" placeholder="Descripción de la propiedad..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="propGroup">Grupo</label>
+                                <input type="text" id="propGroup" placeholder="ej: datos_personales">
+                            </div>
+                            <div class="form-group">
+                                <label for="propMaxLength">Max Length</label>
+                                <input type="number" id="propMaxLength" value="0" min="0">
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h4>Opciones</h4>
+                            <div class="checkbox-grid">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="propRequired">
+                                    <span class="checkmark"></span>
+                                    Required
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="propHidden">
+                                    <span class="checkmark"></span>
+                                    Hidden
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="propIsHeritable">
+                                    <span class="checkmark"></span>
+                                    Is Heritable
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="propIsPrimaryKey">
+                                    <span class="checkmark"></span>
+                                    Is Primary Key
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="propIsUnique">
+                                    <span class="checkmark"></span>
+                                    Is Unique
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="propIsSerchable">
+                                    <span class="checkmark"></span>
+                                    Is Searchable
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="propIsSortable">
+                                    <span class="checkmark"></span>
+                                    Is Sortable
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Reference Relation Section -->
+                        <div class="form-section relation-section" id="relationSection" style="display: none;">
+                            <h4>Relación de Referencia (ReferenceRelation)</h4>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="relationKind">Kind *</label>
+                                    <select id="relationKind">
+                                        <option value="lookup">Lookup</option>
+                                        <option value="embed">Embed</option>
+                                        <option value="link">Link</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="relationTargetEntity">Target Entity *</label>
+                                    <select id="relationTargetEntity">
+                                        <option value="">-- Seleccionar entidad --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="relationLocalField">Local Field *</label>
+                                    <input type="text" id="relationLocalField" placeholder="ej: cliente_id">
+                                </div>
+                                <div class="form-group">
+                                    <label for="relationTargetField">Target Field *</label>
+                                    <select id="relationTargetField">
+                                        <option value="">-- Primero selecciona entidad --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="relationCardinality">Cardinality *</label>
+                                    <select id="relationCardinality">
+                                        <option value="one-to-one">One to One</option>
+                                        <option value="one-to-many">One to Many</option>
+                                        <option value="many-to-one">Many to One</option>
+                                        <option value="many-to-many">Many to Many</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Guardar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- New Project Modal -->
+        <div class="modal-overlay" id="projectModal">
+            <div class="modal modal-sm">
+                <div class="modal-header">
+                    <h3>Nuevo Proyecto</h3>
+                    <button class="close-btn" id="closeProjectModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="projectForm">
+                        <div class="form-group">
+                            <label for="newProjectName">Nombre del Proyecto *</label>
+                            <input type="text" id="newProjectName" placeholder="ej: Mi Proyecto" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="newProjectDesc">Descripción</label>
+                            <textarea id="newProjectDesc" placeholder="Descripción del proyecto..."></textarea>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="cancelProjectBtn">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Crear Proyecto</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invite Member Modal -->
+        <div class="modal-overlay" id="memberModal">
+            <div class="modal modal-sm">
+                <div class="modal-header">
+                    <h3>Invitar Miembro</h3>
+                    <button class="close-btn" id="closeMemberModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="memberForm">
+                        <div class="form-group">
+                            <label for="memberSelect">Seleccionar Usuario *</label>
+                            <select id="memberSelect" required>
+                                <option value="">-- Seleccionar usuario --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="memberRole">Rol</label>
+                            <select id="memberRole">
+                                <option value="editor">Editor (puede crear/editar schemas)</option>
+                                <option value="viewer">Viewer (solo lectura)</option>
+                            </select>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="cancelMemberBtn">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Invitar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div class="toast" id="toast">
+            <span class="toast-icon">✓</span>
+            <span class="toast-message" id="toastMessage">Operación exitosa</span>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Cargando...</p>
+        </div>
+    </div>
+
+    <!-- <script src="supabase-config.js"></script> -->
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

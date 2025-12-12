@@ -1,0 +1,13 @@
+[build]
+  publish = "."
+  command = "node generate-config.js"
+
+[build.environment]
+  # Estas se configuran en Netlify Dashboard > Site settings > Environment variables
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
