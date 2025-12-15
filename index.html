@@ -305,13 +305,40 @@
                                 <div class="form-group">
                                     <label for="propType">Tipo *</label>
                                     <select id="propType" required>
+                                        <!-- Tipos primitivos básicos -->
                                         <option value="string">string</option>
+                                        <option value="object">object</option>
+                                        <option value="array">array</option>
+                                        
+                                        <!-- Números - Integer -->
+                                        <option value="int">int</option>
+                                        <option value="int32">int32</option>
+                                        <option value="long">long</option>
+                                        <option value="int64">int64</option>
+                                        <option value="integer">integer</option>
+                                        
+                                        <!-- Números - Floating -->
+                                        <option value="float">float</option>
+                                        <option value="double">double</option>
+                                        <option value="decimal">decimal</option>
                                         <option value="number">number</option>
+                                        
+                                        <!-- Boolean -->
+                                        <option value="bool">bool</option>
                                         <option value="boolean">boolean</option>
+                                        
+                                        <!-- Dates -->
                                         <option value="date">date</option>
                                         <option value="datetime">datetime</option>
-                                        <option value="array">array</option>
-                                        <option value="object">object</option>
+                                        <option value="date-time">date-time</option>
+                                        <option value="datetimeoffset">datetimeoffset</option>
+                                        
+                                        <!-- Extensions (formatos especiales) -->
+                                        <option value="uuid">uuid</option>
+                                        <option value="guid">guid</option>
+                                        <option value="email">email</option>
+                                        <option value="uri">uri</option>
+                                        <option value="url">url</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
