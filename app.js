@@ -32,15 +32,9 @@ function initializeElements() {
         // Auth
         authSection: document.getElementById('authSection'),
         loginForm: document.getElementById('loginForm'),
-        registerForm: document.getElementById('registerForm'),
         loginEmail: document.getElementById('loginEmail'),
         loginPassword: document.getElementById('loginPassword'),
-        registerEmail: document.getElementById('registerEmail'),
-        registerPassword: document.getElementById('registerPassword'),
-        registerPasswordConfirm: document.getElementById('registerPasswordConfirm'),
-        googleLoginBtn: document.getElementById('googleLoginBtn'),
         authError: document.getElementById('authError'),
-        authTabs: document.querySelectorAll('.auth-tab'),
         
         // User
         userSection: document.getElementById('userSection'),
@@ -53,6 +47,8 @@ function initializeElements() {
         // Project
         projectSelect: document.getElementById('projectSelect'),
         newProjectBtn: document.getElementById('newProjectBtn'),
+        editProjectBtn: document.getElementById('editProjectBtn'),
+        deleteProjectBtn: document.getElementById('deleteProjectBtn'),
         projectInfo: document.getElementById('projectInfo'),
         projectName: document.getElementById('projectName'),
         projectMembersList: document.getElementById('projectMembersList'),
@@ -61,9 +57,12 @@ function initializeElements() {
         
         // Project Modal
         projectModal: document.getElementById('projectModal'),
+        projectModalTitle: document.getElementById('projectModalTitle'),
         projectForm: document.getElementById('projectForm'),
+        projectId: document.getElementById('projectId'),
         newProjectName: document.getElementById('newProjectName'),
         newProjectDesc: document.getElementById('newProjectDesc'),
+        submitProjectBtn: document.getElementById('submitProjectBtn'),
         closeProjectModal: document.getElementById('closeProjectModal'),
         cancelProjectBtn: document.getElementById('cancelProjectBtn'),
         
@@ -155,29 +154,9 @@ function initializeElements() {
 
 // ===== Event Listeners =====
 function initializeEventListeners() {
-    // Auth tabs
-    if (elements.authTabs) {
-        elements.authTabs.forEach(function(tab) {
-            tab.addEventListener('click', function() {
-                const tabName = this.getAttribute('data-tab');
-                switchAuthTab(tabName);
-            });
-        });
-    }
-    
     // Login form
     if (elements.loginForm) {
         elements.loginForm.addEventListener('submit', handleLogin);
-    }
-    
-    // Register form
-    if (elements.registerForm) {
-        elements.registerForm.addEventListener('submit', handleRegister);
-    }
-    
-    // Google login
-    if (elements.googleLoginBtn) {
-        elements.googleLoginBtn.addEventListener('click', handleGoogleLogin);
     }
     
     // Logout
@@ -194,6 +173,20 @@ function initializeEventListeners() {
     if (elements.newProjectBtn) {
         elements.newProjectBtn.addEventListener('click', function() {
             openProjectModal();
+        });
+    }
+    
+    // Edit project
+    if (elements.editProjectBtn) {
+        elements.editProjectBtn.addEventListener('click', function() {
+            openProjectModal(state.currentProject.id);
+        });
+    }
+    
+    // Delete project
+    if (elements.deleteProjectBtn) {
+        elements.deleteProjectBtn.addEventListener('click', function() {
+            handleDeleteProject();
         });
     }
     
@@ -388,25 +381,6 @@ async function checkAuth() {
     });
 }
 
-function switchAuthTab(tabName) {
-    elements.authTabs.forEach(function(tab) {
-        tab.classList.remove('active');
-        if (tab.getAttribute('data-tab') === tabName) {
-            tab.classList.add('active');
-        }
-    });
-    
-    if (tabName === 'login') {
-        elements.loginForm.style.display = 'block';
-        elements.registerForm.style.display = 'none';
-    } else {
-        elements.loginForm.style.display = 'none';
-        elements.registerForm.style.display = 'block';
-    }
-    
-    hideAuthError();
-}
-
 async function handleLogin(e) {
     e.preventDefault();
     showLoading(true);
@@ -429,56 +403,6 @@ async function handleLogin(e) {
     }
     
     showLoading(false);
-}
-
-async function handleRegister(e) {
-    e.preventDefault();
-    showLoading(true);
-    hideAuthError();
-    
-    const email = elements.registerEmail.value.trim();
-    const password = elements.registerPassword.value;
-    const passwordConfirm = elements.registerPasswordConfirm.value;
-    
-    if (password !== passwordConfirm) {
-        showAuthError('Las contraseñas no coinciden');
-        showLoading(false);
-        return;
-    }
-    
-    try {
-        const { data, error } = await supabaseClient.auth.signUp({
-            email: email,
-            password: password
-        });
-        
-        if (error) throw error;
-        
-        showToast('Cuenta creada. Revisa tu email para confirmar.');
-        switchAuthTab('login');
-    } catch (error) {
-        showAuthError(error.message);
-    }
-    
-    showLoading(false);
-}
-
-async function handleGoogleLogin() {
-    showLoading(true);
-    
-    try {
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin
-            }
-        });
-        
-        if (error) throw error;
-    } catch (error) {
-        showAuthError(error.message);
-        showLoading(false);
-    }
 }
 
 async function handleLogout() {
@@ -634,6 +558,7 @@ async function handleProjectChange() {
         // Re-renderizar con restricciones de rol aplicadas
         renderSavedSchemas();
         renderProperties();
+        updateProjectButtons();
         
         // Subscribe to realtime
         subscribeToSchemas();
@@ -694,6 +619,22 @@ async function determineUserRole(projectId) {
     }
 }
 
+function updateProjectButtons() {
+    const isOwner = state.userRole === 'owner';
+    const canEdit = isOwner || state.userRole === 'editor';
+    
+    // Botones de proyecto (solo owner)
+    if (elements.editProjectBtn) {
+        elements.editProjectBtn.style.display = isOwner ? 'inline-block' : 'none';
+    }
+    if (elements.deleteProjectBtn) {
+        elements.deleteProjectBtn.style.display = isOwner ? 'inline-block' : 'none';
+    }
+    if (elements.inviteMemberBtn) {
+        elements.inviteMemberBtn.style.display = isOwner ? 'inline-block' : 'none';
+    }
+}
+
 function applyRoleRestrictions() {
     const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
     
@@ -718,7 +659,25 @@ function applyRoleRestrictions() {
     }
 }
 
-function openProjectModal() {
+function openProjectModal(projectId) {
+    if (projectId) {
+        // Modo edición
+        const project = state.currentProject;
+        if (!project) return;
+        
+        if (elements.projectModalTitle) elements.projectModalTitle.textContent = 'Editar Proyecto';
+        if (elements.projectId) elements.projectId.value = project.id;
+        if (elements.newProjectName) elements.newProjectName.value = project.name;
+        if (elements.newProjectDesc) elements.newProjectDesc.value = project.description || '';
+        if (elements.submitProjectBtn) elements.submitProjectBtn.textContent = 'Guardar Cambios';
+    } else {
+        // Modo creación
+        if (elements.projectModalTitle) elements.projectModalTitle.textContent = 'Nuevo Proyecto';
+        if (elements.projectId) elements.projectId.value = '';
+        if (elements.projectForm) elements.projectForm.reset();
+        if (elements.submitProjectBtn) elements.submitProjectBtn.textContent = 'Crear Proyecto';
+    }
+    
     if (elements.projectModal) elements.projectModal.classList.add('active');
     if (elements.newProjectName) elements.newProjectName.focus();
 }
@@ -732,43 +691,109 @@ async function handleCreateProject(e) {
     e.preventDefault();
     showLoading(true);
     
+    const projectId = elements.projectId ? elements.projectId.value : '';
     const name = elements.newProjectName.value.trim();
     const description = elements.newProjectDesc.value.trim();
     
     try {
-        const { data, error } = await supabaseClient
-            .from('projects')
-            .insert({
-                name: name,
-                description: description,
-                owner_id: state.user.id
-            })
-            .select()
-            .single();
-        
-        if (error) throw error;
-        
-        // Add owner as member
-        await supabaseClient
-            .from('project_members')
-            .insert({
-                project_id: data.id,
-                user_id: state.user.id,
-                role: 'owner'
-            });
+        if (projectId) {
+            // Actualizar proyecto existente
+            const { error } = await supabaseClient
+                .from('projects')
+                .update({
+                    name: name,
+                    description: description
+                })
+                .eq('id', projectId);
+            
+            if (error) throw error;
+            
+            showToast('Proyecto actualizado: ' + name);
+        } else {
+            // Crear nuevo proyecto
+            const { data, error } = await supabaseClient
+                .from('projects')
+                .insert({
+                    name: name,
+                    description: description,
+                    owner_id: state.user.id
+                })
+                .select()
+                .single();
+            
+            if (error) throw error;
+            
+            // Add owner as member
+            await supabaseClient
+                .from('project_members')
+                .insert({
+                    project_id: data.id,
+                    user_id: state.user.id,
+                    role: 'owner'
+                });
+            
+            // Select the new project
+            elements.projectSelect.value = data.id;
+            
+            showToast('Proyecto creado: ' + name);
+        }
         
         closeProjectModal();
         await loadProjects();
-        
-        // Select the new project
-        elements.projectSelect.value = data.id;
         await handleProjectChange();
         
-        showToast('Proyecto creado: ' + name);
+    } catch (error) {
+        console.error('Error saving project:', error);
+        showToast('Error al guardar proyecto: ' + error.message, 'error');
+    }
+    
+    showLoading(false);
+}
+
+async function handleDeleteProject() {
+    if (!state.currentProject) {
+        showToast('No hay proyecto seleccionado', 'error');
+        return;
+    }
+    
+    // Solo el owner puede eliminar
+    if (state.userRole !== 'owner') {
+        showToast('Solo el propietario puede eliminar el proyecto', 'error');
+        return;
+    }
+    
+    const projectName = state.currentProject.name;
+    
+    if (!confirm('¿Estás seguro de eliminar el proyecto "' + projectName + '"?\n\nEsta acción eliminará también todos los schemas y miembros asociados y no se puede deshacer.')) {
+        return;
+    }
+    
+    showLoading(true);
+    
+    try {
+        // Eliminar proyecto (cascade eliminará schemas y members automáticamente si está configurado)
+        const { error } = await supabaseClient
+            .from('projects')
+            .delete()
+            .eq('id', state.currentProject.id);
+        
+        if (error) throw error;
+        
+        showToast('Proyecto "' + projectName + '" eliminado correctamente');
+        
+        // Limpiar estado
+        state.currentProject = null;
+        state.userRole = null;
+        state.savedSchemas = [];
+        state.properties = [];
+        
+        // Recargar proyectos y ocultar secciones
+        await loadProjects();
+        hideProjectSections();
         
     } catch (error) {
-        console.error('Error creating project:', error);
-        showToast('Error al crear proyecto: ' + error.message, 'error');
+        console.error('Error deleting project:', error);
+        showToast('Error al eliminar proyecto: ' + error.message, 'error');
     }
     
     showLoading(false);
@@ -1027,6 +1052,46 @@ function updateSyncStatus(status) {
     }
 }
 
+// ===== Check Circular Inheritance =====
+function checkCircularInheritance(entityName, parentEntity) {
+    // Si el padre es el mismo que la entidad actual
+    if (entityName === parentEntity) {
+        return 'Error: Una entidad no puede heredar de sí misma';
+    }
+    
+    // Buscar la cadena de herencia
+    const visited = new Set();
+    let currentEntity = parentEntity;
+    
+    while (currentEntity) {
+        // Si ya visitamos esta entidad, hay un ciclo
+        if (visited.has(currentEntity)) {
+            return 'Error: Se detectó herencia circular en la cadena: ' + Array.from(visited).join(' → ') + ' → ' + currentEntity;
+        }
+        
+        // Si el padre eventualmente hereda de la entidad actual, es circular
+        if (currentEntity === entityName) {
+            return 'Error: Herencia circular detectada - "' + parentEntity + '" no puede heredar de "' + entityName + '" porque crearía un ciclo';
+        }
+        
+        visited.add(currentEntity);
+        
+        // Buscar el schema del padre actual
+        const parentSchema = state.savedSchemas.find(s => s.entity === currentEntity);
+        
+        // Si no existe o no hereda de nadie, terminamos
+        if (!parentSchema || !parentSchema.inheritance || !parentSchema.inheritance.extends) {
+            break;
+        }
+        
+        // Continuar con el siguiente padre
+        currentEntity = parentSchema.inheritance.extends;
+    }
+    
+    // No hay herencia circular
+    return null;
+}
+
 async function saveCurrentSchema() {
     if (!state.currentProject) {
         showToast('Selecciona un proyecto primero', 'error');
@@ -1040,6 +1105,16 @@ async function saveCurrentSchema() {
         return;
     }
     
+    // Validar herencia circular
+    const inheritanceObj = buildInheritanceObject();
+    if (inheritanceObj.extends) {
+        const circularError = checkCircularInheritance(entityName, inheritanceObj.extends);
+        if (circularError) {
+            showToast(circularError, 'error');
+            return;
+        }
+    }
+    
     showLoading(true);
     updateSyncStatus('syncing');
     
@@ -1051,7 +1126,7 @@ async function saveCurrentSchema() {
             version: elements.version ? parseInt(elements.version.value) || 1 : 1,
             mutable: elements.mutable ? elements.mutable.checked : true,
             properties: buildPropertiesObject(),
-            inheritance: buildInheritanceObject(),
+            inheritance: inheritanceObj,
             updated_by: state.user.id
         };
         
@@ -1121,13 +1196,13 @@ function buildInheritanceObject() {
         isBase: elements.isBase ? elements.isBase.checked : true
     };
     
-    if (elements.isBase && !elements.isBase.checked) {
-        if (elements.extendsSelect && elements.extendsSelect.value) {
-            inheritance.extends = elements.extendsSelect.value;
-        }
-        if (elements.strategy && elements.strategy.value) {
-            inheritance.strategy = elements.strategy.value;
-        }
+    // Ahora una entidad puede ser base y heredar al mismo tiempo
+    // Solo incluir extends y strategy si tienen valores seleccionados
+    if (elements.extendsSelect && elements.extendsSelect.value) {
+        inheritance.extends = elements.extendsSelect.value;
+    }
+    if (elements.strategy && elements.strategy.value && elements.strategy.value !== '') {
+        inheritance.strategy = elements.strategy.value;
     }
     
     return inheritance;
@@ -1148,7 +1223,7 @@ function createNewSchema() {
     if (elements.mutable) elements.mutable.checked = true;
     if (elements.isBase) elements.isBase.checked = true;
     if (elements.extendsSelect) elements.extendsSelect.value = '';
-    if (elements.strategy) elements.strategy.value = 'override';
+    if (elements.strategy) elements.strategy.value = '';
     
     state.properties = [];
     
@@ -1478,12 +1553,8 @@ function handleTargetEntityChange() {
 
 // ===== Inheritance Toggle =====
 function handleIsBaseChange() {
-    if (!elements.isBase || !elements.extendsFields) return;
-    
-    const showExtendsFields = !elements.isBase.checked;
-    elements.extendsFields.forEach(function(field) {
-        field.style.display = showExtendsFields ? 'flex' : 'none';
-    });
+    // Los campos de herencia ahora siempre están visibles
+    // Solo regeneramos el schema cuando cambia el checkbox
     updateEntitySelectors();
     generateSchema();
 }
