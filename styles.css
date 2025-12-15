@@ -1032,12 +1032,20 @@ body::before {
 .project-details {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 1rem;
+    width: 100%;
 }
 
 .project-details span:first-child {
     font-weight: 600;
     color: var(--accent-primary);
+}
+
+.project-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
 }
 
 .project-members {
