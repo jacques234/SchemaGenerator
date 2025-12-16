@@ -13,7 +13,9 @@ const state = {
     properties: [],
     savedSchemas: [],
     editIndex: -1,
-    realtimeSubscription: null
+    realtimeSubscription: null,
+    currentSchemaId: null,  // ID del schema cargado actualmente
+    autoSaveTimeout: null   // Timeout para autoguardado
 };
 
 // ===== DOM Elements (initialized after DOM load) =====
@@ -1209,14 +1211,6 @@ function buildInheritanceObject() {
 }
 
 function createNewSchema() {
-    const hasUnsavedWork = (elements.entityName && elements.entityName.value.trim() !== '') || state.properties.length > 0;
-    
-    if (hasUnsavedWork) {
-        if (!confirm('¿Deseas crear un nuevo schema? Los cambios no guardados se perderán.')) {
-            return;
-        }
-    }
-    
     // Clear fields
     if (elements.entityName) elements.entityName.value = '';
     if (elements.version) elements.version.value = 1;
@@ -1226,6 +1220,7 @@ function createNewSchema() {
     if (elements.strategy) elements.strategy.value = '';
     
     state.properties = [];
+    state.currentSchemaId = null;  // Limpiar ID para crear nuevo
     
     handleIsBaseChange();
     renderProperties();
@@ -1233,12 +1228,15 @@ function createNewSchema() {
     
     if (elements.entityName) elements.entityName.focus();
     
-    showToast('Formulario limpiado - Listo para nuevo schema');
+    showToast('Listo para crear nuevo schema');
 }
 
 function loadSchema(schemaId) {
     const schema = state.savedSchemas.find(s => s.id === schemaId);
     if (!schema) return;
+    
+    // Guardar ID del schema actual para autoguardado
+    state.currentSchemaId = schemaId;
     
     // Load entity info
     if (elements.entityName) elements.entityName.value = schema.entity;
@@ -1341,6 +1339,7 @@ function renderSavedSchemas() {
         html += '</div>';
         html += '<div class="schema-actions">';
         html += '<button class="btn btn-secondary btn-icon" onclick="loadSchema(\'' + schema.id + '\')" title="Cargar">📂</button>';
+        html += '<button class="btn btn-secondary btn-icon" onclick="exportSchema(\'' + schema.id + '\')" title="Exportar">📤</button>';
         if (canEdit) {
             html += '<button class="btn btn-danger btn-icon" onclick="deleteSchema(\'' + schema.id + '\')" title="Eliminar">🗑️</button>';
         }
@@ -1394,7 +1393,33 @@ function exportProject() {
     showToast('Proyecto exportado: ' + state.savedSchemas.length + ' schemas');
 }
 
-// ===== Import Project =====
+// ===== Export Single Schema =====
+function exportSchema(schemaId) {
+    const schema = state.savedSchemas.find(s => s.id === schemaId);
+    if (!schema) return;
+    
+    const exportData = {
+        entity: schema.entity,
+        version: schema.version || 1,
+        mutable: schema.mutable !== false,
+        properties: schema.properties || {},
+        inheritance: schema.inheritance || { isBase: true }
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = schema.entity + '_schema.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('Schema "' + schema.entity + '" exportado');
+}
+
+// ===== Import Project or Schema =====
 async function handleImportFile(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -1418,19 +1443,33 @@ async function handleImportFile(e) {
         const text = await file.text();
         const importData = JSON.parse(text);
         
-        // Validar estructura
-        if (!importData.schemas || !Array.isArray(importData.schemas)) {
-            showToast('Archivo inválido: no contiene schemas', 'error');
+        // Detectar si es un schema individual o un proyecto
+        let schemas = [];
+        let sourceName = 'archivo';
+        
+        if (importData.schemas && Array.isArray(importData.schemas)) {
+            // Es un proyecto exportado
+            schemas = importData.schemas;
+            sourceName = importData.projectName || 'proyecto';
+        } else if (importData.entity) {
+            // Es un schema individual
+            schemas = [importData];
+            sourceName = importData.entity;
+        } else {
+            showToast('Archivo inválido: formato no reconocido', 'error');
             return;
         }
         
-        if (importData.schemas.length === 0) {
+        if (schemas.length === 0) {
             showToast('El archivo no contiene schemas', 'error');
             return;
         }
         
         // Confirmar importación
-        const msg = '¿Importar ' + importData.schemas.length + ' schemas de "' + (importData.projectName || 'archivo') + '"?\n\nLos schemas existentes con el mismo nombre serán actualizados.';
+        const isMultiple = schemas.length > 1;
+        const msg = isMultiple 
+            ? '¿Importar ' + schemas.length + ' schemas de "' + sourceName + '"?\n\nLos schemas existentes con el mismo nombre serán actualizados.'
+            : '¿Importar schema "' + schemas[0].entity + '"?\n\nSi ya existe, será actualizado.';
         if (!confirm(msg)) return;
         
         showLoading(true);
@@ -1439,7 +1478,7 @@ async function handleImportFile(e) {
         let updated = 0;
         let errors = 0;
         
-        for (const schema of importData.schemas) {
+        for (const schema of schemas) {
             try {
                 // Verificar si ya existe
                 const existing = state.savedSchemas.find(s => s.entity === schema.entity);
@@ -1798,7 +1837,85 @@ function generateSchema() {
         elements.jsonOutput.innerHTML = '<code>' + highlightJson(json) + '</code>';
     }
     
+    // Activar autoguardado si hay un schema cargado o hay nombre de entidad
+    triggerAutoSave();
+    
     return schema;
+}
+
+// ===== Auto Save =====
+function triggerAutoSave() {
+    // Solo autoguardar si el usuario puede editar
+    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
+    if (!canEdit || !state.currentProject) return;
+    
+    const entityName = elements.entityName ? elements.entityName.value.trim() : '';
+    if (!entityName) return;
+    
+    // Cancelar timeout anterior
+    if (state.autoSaveTimeout) {
+        clearTimeout(state.autoSaveTimeout);
+    }
+    
+    // Mostrar indicador de "guardando..."
+    updateSyncStatus('syncing');
+    
+    // Debounce: esperar 2 segundos antes de guardar
+    state.autoSaveTimeout = setTimeout(function() {
+        autoSaveSchema();
+    }, 2000);
+}
+
+async function autoSaveSchema() {
+    const entityName = elements.entityName ? elements.entityName.value.trim() : '';
+    if (!entityName || !state.currentProject) return;
+    
+    try {
+        const schemaData = {
+            project_id: state.currentProject.id,
+            entity: entityName,
+            version: elements.version ? parseInt(elements.version.value) || 1 : 1,
+            mutable: elements.mutable ? elements.mutable.checked : true,
+            properties: buildPropertiesObject(),
+            inheritance: buildInheritanceObject(),
+            updated_by: state.user.id
+        };
+        
+        // Buscar si ya existe por nombre o por ID
+        const existing = state.currentSchemaId 
+            ? state.savedSchemas.find(s => s.id === state.currentSchemaId)
+            : state.savedSchemas.find(s => s.entity === entityName);
+        
+        if (existing) {
+            // Update
+            const { error } = await supabaseClient
+                .from('schemas')
+                .update(schemaData)
+                .eq('id', existing.id);
+            
+            if (error) throw error;
+            state.currentSchemaId = existing.id;
+        } else {
+            // Insert
+            schemaData.created_by = state.user.id;
+            
+            const { data, error } = await supabaseClient
+                .from('schemas')
+                .insert(schemaData)
+                .select('id')
+                .single();
+            
+            if (error) throw error;
+            state.currentSchemaId = data.id;
+        }
+        
+        await loadSchemas();
+        updateSyncStatus('synced');
+        
+    } catch (error) {
+        console.error('Error auto-saving:', error);
+        updateSyncStatus('error');
+    }
 }
 
 // ===== JSON Syntax Highlighting =====
@@ -1926,4 +2043,5 @@ window.editProperty = editProperty;
 window.deleteProperty = deleteProperty;
 window.loadSchema = loadSchema;
 window.deleteSchema = deleteSchema;
+window.exportSchema = exportSchema;
 window.removeMember = removeMember;
