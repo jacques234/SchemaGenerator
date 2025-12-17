@@ -1551,7 +1551,7 @@ function exportSchema(schemaId) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = schema.entity + '_schema.json';
+    a.download = schema.entity + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
