@@ -78,6 +78,14 @@ function initializeElements() {
         
         // Sections
         schemasSection: document.getElementById('schemasSection'),
+        schemaCount: document.getElementById('schemaCount'),
+        schemaSearch: document.getElementById('schemaSearch'),
+        gridViewBtn: document.getElementById('gridViewBtn'),
+        listViewBtn: document.getElementById('listViewBtn'),
+        collectionsSection: document.getElementById('collectionsSection'),
+        collectionsChips: document.getElementById('collectionsChips'),
+        copyCollectionsBtn: document.getElementById('copyCollectionsBtn'),
+        copyCollectionsArrayBtn: document.getElementById('copyCollectionsArrayBtn'),
         twoColumnLayout: document.querySelector('.two-column-layout'),
         entitySection: document.getElementById('entitySection'),
         propertiesSection: document.getElementById('propertiesSection'),
@@ -285,6 +293,39 @@ function initializeEventListeners() {
     if (elements.importFileInput) {
         elements.importFileInput.addEventListener('change', function(e) {
             handleImportFile(e);
+        });
+    }
+    
+    // Copy collections button
+    if (elements.copyCollectionsBtn) {
+        elements.copyCollectionsBtn.addEventListener('click', function() {
+            copyCollections();
+        });
+    }
+    
+    // Copy collections as array button
+    if (elements.copyCollectionsArrayBtn) {
+        elements.copyCollectionsArrayBtn.addEventListener('click', function() {
+            copyCollectionsArray();
+        });
+    }
+    
+    // Schema search
+    if (elements.schemaSearch) {
+        elements.schemaSearch.addEventListener('input', function() {
+            filterSchemas();
+        });
+    }
+    
+    // View toggle buttons
+    if (elements.gridViewBtn) {
+        elements.gridViewBtn.addEventListener('click', function() {
+            setSchemaView('grid');
+        });
+    }
+    if (elements.listViewBtn) {
+        elements.listViewBtn.addEventListener('click', function() {
+            setSchemaView('list');
         });
     }
     
@@ -575,6 +616,7 @@ async function handleProjectChange() {
 
 function showProjectSections() {
     if (elements.schemasSection) elements.schemasSection.style.display = 'block';
+    if (elements.collectionsSection) elements.collectionsSection.style.display = 'block';
     if (elements.twoColumnLayout) elements.twoColumnLayout.style.display = 'grid';
     if (elements.entitySection) elements.entitySection.style.display = 'block';
     if (elements.propertiesSection) elements.propertiesSection.style.display = 'block';
@@ -583,6 +625,7 @@ function showProjectSections() {
 
 function hideProjectSections() {
     if (elements.schemasSection) elements.schemasSection.style.display = 'none';
+    if (elements.collectionsSection) elements.collectionsSection.style.display = 'none';
     if (elements.twoColumnLayout) elements.twoColumnLayout.style.display = 'none';
     if (elements.entitySection) elements.entitySection.style.display = 'none';
     if (elements.propertiesSection) elements.propertiesSection.style.display = 'none';
@@ -973,6 +1016,7 @@ async function loadSchemas() {
         
         state.savedSchemas = data || [];
         renderSavedSchemas();
+        renderCollections();
         updateEntitySelectors();
         
     } catch (error) {
@@ -1348,6 +1392,103 @@ function renderSavedSchemas() {
     });
     
     elements.savedSchemasList.innerHTML = html;
+}
+
+// ===== Render Collections (Chips) =====
+function renderCollections() {
+    if (!elements.collectionsChips) return;
+    
+    if (state.savedSchemas.length === 0) {
+        elements.collectionsChips.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No hay collections aún</span>';
+        return;
+    }
+    
+    let html = '';
+    state.savedSchemas.forEach(function(schema) {
+        html += '<div class="collection-chip" onclick="copyCollectionName(\'' + schema.entity + '\')" title="Click para copiar">';
+        html += '<span class="chip-name">' + schema.entity + '</span>';
+        html += '<span class="chip-copy">📋</span>';
+        html += '</div>';
+    });
+    
+    elements.collectionsChips.innerHTML = html;
+    
+    // Update schema count
+    if (elements.schemaCount) {
+        elements.schemaCount.textContent = '(' + state.savedSchemas.length + ')';
+    }
+}
+
+function copyCollectionName(name) {
+    navigator.clipboard.writeText(name).then(function() {
+        showToast('"' + name + '" copiado');
+    }).catch(function() {
+        showToast('Error al copiar', 'error');
+    });
+}
+
+function copyCollections() {
+    const collections = state.savedSchemas.map(function(schema) {
+        return schema.entity;
+    });
+    
+    const output = {
+        collections: collections
+    };
+    
+    const json = JSON.stringify(output, null, 2);
+    
+    navigator.clipboard.writeText(json).then(function() {
+        showToast('JSON copiado al portapapeles');
+    }).catch(function() {
+        showToast('Error al copiar', 'error');
+    });
+}
+
+function copyCollectionsArray() {
+    const collections = state.savedSchemas.map(function(schema) {
+        return schema.entity;
+    });
+    
+    const json = JSON.stringify(collections);
+    
+    navigator.clipboard.writeText(json).then(function() {
+        showToast('Array copiado: ' + collections.length + ' items');
+    }).catch(function() {
+        showToast('Error al copiar', 'error');
+    });
+}
+
+// ===== Schema View Toggle =====
+function setSchemaView(view) {
+    if (!elements.savedSchemasList) return;
+    
+    if (view === 'grid') {
+        elements.savedSchemasList.classList.remove('saved-schemas-list');
+        elements.savedSchemasList.classList.add('saved-schemas-grid');
+        if (elements.gridViewBtn) elements.gridViewBtn.classList.add('active');
+        if (elements.listViewBtn) elements.listViewBtn.classList.remove('active');
+    } else {
+        elements.savedSchemasList.classList.remove('saved-schemas-grid');
+        elements.savedSchemasList.classList.add('saved-schemas-list');
+        if (elements.listViewBtn) elements.listViewBtn.classList.add('active');
+        if (elements.gridViewBtn) elements.gridViewBtn.classList.remove('active');
+    }
+}
+
+// ===== Filter Schemas =====
+function filterSchemas() {
+    const searchTerm = elements.schemaSearch ? elements.schemaSearch.value.toLowerCase().trim() : '';
+    const cards = document.querySelectorAll('.saved-schema-card');
+    
+    cards.forEach(function(card) {
+        const schemaName = card.querySelector('h4')?.textContent.toLowerCase() || '';
+        if (searchTerm === '' || schemaName.includes(searchTerm)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
 }
 
 // ===== Export Project =====
@@ -2045,3 +2186,4 @@ window.loadSchema = loadSchema;
 window.deleteSchema = deleteSchema;
 window.exportSchema = exportSchema;
 window.removeMember = removeMember;
+window.copyCollectionName = copyCollectionName;

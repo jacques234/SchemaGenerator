@@ -169,6 +169,169 @@ body::before {
     }
 }
 
+/* ===== Schemas Panel Improvements ===== */
+.saved-schemas-panel .panel-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.schema-count {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+}
+
+.search-box {
+    flex: 0 1 180px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    transition: var(--transition-fast);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.view-toggle {
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.view-btn {
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-tertiary);
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: var(--transition-fast);
+}
+
+.view-btn:hover {
+    background: var(--bg-secondary);
+}
+
+.view-btn.active {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-sm {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+.btn-sm span {
+    margin-right: 0;
+}
+
+.schemas-panel-body {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0.75rem !important;
+}
+
+/* Grid View for Schemas */
+.saved-schemas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.saved-schemas-grid .saved-schema-card {
+    flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.5rem;
+}
+
+.saved-schemas-grid .schema-info h4 {
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.saved-schemas-grid .schema-meta {
+    font-size: 0.75rem;
+}
+
+.saved-schemas-grid .schema-actions {
+    justify-content: flex-end;
+    gap: 0.25rem;
+}
+
+.saved-schemas-grid .btn-icon {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+/* List View for Schemas */
+.saved-schemas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.saved-schemas-list .saved-schema-card {
+    flex-direction: row;
+    padding: 0.5rem 0.75rem;
+}
+
+/* ===== Collections Panel - Improved ===== */
+.collections-body {
+    padding: 0.75rem 1rem !important;
+}
+
+.collections-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.collection-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+    border: 1px solid var(--border-color);
+    border-radius: 2rem;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.collection-chip:hover {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+    transform: translateY(-1px);
+}
+
+.collection-chip .chip-copy {
+    font-size: 0.7rem;
+    opacity: 0.5;
+    transition: var(--transition-fast);
+}
+
+.collection-chip:hover .chip-copy {
+    opacity: 1;
+}
+
 /* ===== Panels ===== */
 .panel {
     background: var(--bg-card);

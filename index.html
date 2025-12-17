@@ -105,31 +105,60 @@
                 <div class="panel-header">
                     <h2>
                         <span class="icon">💾</span>
-                        Schemas del Proyecto
+                        Schemas
+                        <span class="schema-count" id="schemaCount">(0)</span>
                     </h2>
                     <div class="header-actions">
-                        <button class="btn btn-primary" id="saveSchemaBtn">
-                            <span>💾</span> Guardar Schema Actual
+                        <div class="search-box">
+                            <input type="text" id="schemaSearch" placeholder="🔍 Buscar..." class="search-input">
+                        </div>
+                        <div class="view-toggle">
+                            <button class="view-btn active" id="gridViewBtn" title="Vista Grid">▦</button>
+                            <button class="view-btn" id="listViewBtn" title="Vista Lista">☰</button>
+                        </div>
+                        <button class="btn btn-primary btn-sm" id="saveSchemaBtn" title="Guardar Schema">
+                            <span>💾</span>
                         </button>
-                        <button class="btn btn-secondary" id="newSchemaBtn">
-                            <span>➕</span> Nuevo Schema
+                        <button class="btn btn-secondary btn-sm" id="newSchemaBtn" title="Nuevo Schema">
+                            <span>➕</span>
                         </button>
-                        <button class="btn btn-secondary" id="exportProjectBtn" title="Exportar todos los schemas">
-                            <span>📤</span> Exportar
+                        <button class="btn btn-secondary btn-sm" id="exportProjectBtn" title="Exportar todos">
+                            <span>📤</span>
                         </button>
-                        <button class="btn btn-secondary" id="importProjectBtn" title="Importar schemas desde archivo">
-                            <span>📥</span> Importar
+                        <button class="btn btn-secondary btn-sm" id="importProjectBtn" title="Importar">
+                            <span>📥</span>
                         </button>
                         <input type="file" id="importFileInput" accept=".json" style="display: none;">
                     </div>
                 </div>
-                <div class="panel-body">
-                    <div id="savedSchemasList" class="saved-schemas-list">
+                <div class="panel-body schemas-panel-body">
+                    <div id="savedSchemasList" class="saved-schemas-grid">
                         <div class="empty-state" id="savedEmptyState">
                             <p>No hay schemas en este proyecto</p>
                             <small>Crea un schema para empezar</small>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <!-- Collections Section - Improved -->
+            <section class="panel collections-panel" id="collectionsSection" style="display: none;">
+                <div class="panel-header">
+                    <h2>
+                        <span class="icon">📚</span>
+                        Collections
+                    </h2>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary btn-sm" id="copyCollectionsBtn" title="Copiar JSON">
+                            <span>{ }</span> JSON
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="copyCollectionsArrayBtn" title="Copiar como array">
+                            <span>[ ]</span> Array
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body collections-body">
+                    <div id="collectionsChips" class="collections-chips"></div>
                 </div>
             </section>
 
@@ -278,30 +307,30 @@
                                         <option value="string">string</option>
                                         <option value="object">object</option>
                                         <option value="array">array</option>
-                                        
+
                                         <!-- Números - Integer -->
                                         <option value="int">int</option>
                                         <option value="int32">int32</option>
                                         <option value="long">long</option>
                                         <option value="int64">int64</option>
                                         <option value="integer">integer</option>
-                                        
+
                                         <!-- Números - Floating -->
                                         <option value="float">float</option>
                                         <option value="double">double</option>
                                         <option value="decimal">decimal</option>
                                         <option value="number">number</option>
-                                        
+
                                         <!-- Boolean -->
                                         <option value="bool">bool</option>
                                         <option value="boolean">boolean</option>
-                                        
+
                                         <!-- Dates -->
                                         <option value="date">date</option>
                                         <option value="datetime">datetime</option>
                                         <option value="date-time">date-time</option>
                                         <option value="datetimeoffset">datetimeoffset</option>
-                                        
+
                                         <!-- Extensions (formatos especiales) -->
                                         <option value="uuid">uuid</option>
                                         <option value="guid">guid</option>
