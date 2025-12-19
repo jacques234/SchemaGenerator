@@ -115,6 +115,7 @@ function initializeElements() {
         exportProjectBtn: document.getElementById('exportProjectBtn'),
         importProjectBtn: document.getElementById('importProjectBtn'),
         importFileInput: document.getElementById('importFileInput'),
+        migrateTypesBtn: document.getElementById('migrateTypesBtn'),
         
         // Modal
         propertyModal: document.getElementById('propertyModal'),
@@ -134,7 +135,6 @@ function initializeElements() {
         propMaxLength: document.getElementById('propMaxLength'),
         propRequired: document.getElementById('propRequired'),
         propHidden: document.getElementById('propHidden'),
-        propIsHeritable: document.getElementById('propIsHeritable'),
         propIsPrimaryKey: document.getElementById('propIsPrimaryKey'),
         propIsUnique: document.getElementById('propIsUnique'),
         propIsSerchable: document.getElementById('propIsSerchable'),
@@ -249,6 +249,11 @@ function initializeEventListeners() {
         elements.propIsReference.addEventListener('change', handleReferenceChange);
     }
     
+    // Target field change
+    if (elements.relationTargetField) {
+        elements.relationTargetField.addEventListener('change', handleTargetFieldChange);
+    }
+    
     // Target entity change
     if (elements.relationTargetEntity) {
         elements.relationTargetEntity.addEventListener('change', handleTargetEntityChange);
@@ -293,6 +298,13 @@ function initializeEventListeners() {
     if (elements.importFileInput) {
         elements.importFileInput.addEventListener('change', function(e) {
             handleImportFile(e);
+        });
+    }
+    
+    // Migrate types button
+    if (elements.migrateTypesBtn) {
+        elements.migrateTypesBtn.addEventListener('click', function() {
+            migrateDataTypes();
         });
     }
     
@@ -692,6 +704,9 @@ function applyRoleRestrictions() {
     }
     if (elements.importProjectBtn) {
         elements.importProjectBtn.style.display = canEdit ? 'inline-flex' : 'none';
+    }
+    if (elements.migrateTypesBtn) {
+        elements.migrateTypesBtn.style.display = canEdit ? 'inline-flex' : 'none';
     }
     if (elements.inviteMemberBtn) {
         // Solo owner puede invitar
@@ -1290,7 +1305,7 @@ function loadSchema(schemaId) {
     // Load inheritance
     if (elements.isBase) elements.isBase.checked = schema.inheritance?.isBase !== false;
     if (elements.extendsSelect) elements.extendsSelect.value = schema.inheritance?.extends || '';
-    if (elements.strategy) elements.strategy.value = schema.inheritance?.strategy || 'override';
+    if (elements.strategy) elements.strategy.value = schema.inheritance?.strategy || '';
     
     // Load properties
     state.properties = Object.entries(schema.properties || {}).map(function([key, prop]) {
@@ -1489,6 +1504,129 @@ function filterSchemas() {
             card.style.display = 'none';
         }
     });
+}
+
+// ===== Migrate Data Types =====
+async function migrateDataTypes() {
+    if (!state.currentProject || state.savedSchemas.length === 0) {
+        showToast('No hay schemas para migrar', 'error');
+        return;
+    }
+    
+    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
+    if (!canEdit) {
+        showToast('No tienes permisos para migrar tipos', 'error');
+        return;
+    }
+    
+    const confirmMsg = `¿Deseas migrar los tipos de datos de todos los schemas del proyecto?
+
+Esto actualizará los tipos antiguos a los nuevos tipos:
+- uuid/guid → id
+- string → text
+- int/int32/int64/long/integer → number
+- float/double/number → decimal
+- boolean → bool
+- date/datetime/date-time/datetimeoffset → date
+
+Total de schemas: ${state.savedSchemas.length}`;
+    
+    if (!confirm(confirmMsg)) return;
+    
+    showLoading();
+    
+    try {
+        const typeMapping = {
+            // IDs
+            'uuid': 'id',
+            'guid': 'id',
+            
+            // Strings
+            'string': 'text',
+            
+            // Numbers (integers)
+            'int': 'number',
+            'int32': 'number',
+            'int64': 'number',
+            'long': 'number',
+            'integer': 'number',
+            
+            // Numbers (decimals)
+            'float': 'decimal',
+            'double': 'decimal',
+            'number': 'decimal',
+            
+            // Booleans
+            'boolean': 'bool',
+            
+            // Dates
+            'date': 'date',
+            'datetime': 'date',
+            'date-time': 'date',
+            'datetimeoffset': 'date'
+        };
+        
+        let migratedCount = 0;
+        let propertiesUpdated = 0;
+        
+        for (const schema of state.savedSchemas) {
+            let schemaModified = false;
+            const updatedProperties = {};
+            
+            if (schema.properties) {
+                Object.entries(schema.properties).forEach(([key, prop]) => {
+                    const oldType = prop.Type;
+                    const newType = typeMapping[oldType] || oldType;
+                    
+                    if (newType !== oldType) {
+                        propertiesUpdated++;
+                        schemaModified = true;
+                    }
+                    
+                    updatedProperties[key] = {
+                        ...prop,
+                        Type: newType
+                    };
+                });
+            }
+            
+            if (schemaModified) {
+                // Actualizar en la base de datos
+                const { error } = await supabaseClient
+                    .from('schemas')
+                    .update({
+                        properties: updatedProperties,
+                        updated_by: state.user.id
+                    })
+                    .eq('id', schema.id);
+                
+                if (error) throw error;
+                migratedCount++;
+            }
+        }
+        
+        hideLoading();
+        
+        if (migratedCount > 0) {
+            showToast(`Migración completada: ${migratedCount} schemas actualizados, ${propertiesUpdated} propiedades modificadas`);
+            await loadSchemas();
+            
+            // Si el schema actual fue modificado, recargarlo
+            if (state.currentSchemaId) {
+                const currentSchema = state.savedSchemas.find(s => s.id === state.currentSchemaId);
+                if (currentSchema) {
+                    loadSchema(state.currentSchemaId);
+                }
+            }
+        } else {
+            showToast('No se encontraron tipos para migrar');
+        }
+        
+    } catch (error) {
+        hideLoading();
+        console.error('Error migrando tipos:', error);
+        showToast('Error al migrar tipos: ' + error.message, 'error');
+    }
 }
 
 // ===== Export Project =====
@@ -1726,9 +1864,22 @@ function handleTargetEntityChange() {
         if (prop.IsPrimaryKey) {
             label += ' 🔑';
         }
-        html += '<option value="' + fieldKey + '">' + label + '</option>';
+        html += '<option value="' + fieldKey + '" data-type="' + prop.Type + '">' + label + '</option>';
     });
     elements.relationTargetField.innerHTML = html;
+}
+
+// ===== Handle Target Field Change =====
+function handleTargetFieldChange() {
+    if (!elements.relationTargetField || !elements.propType) return;
+    if (!elements.propIsReference || !elements.propIsReference.checked) return;
+    
+    const selectedOption = elements.relationTargetField.options[elements.relationTargetField.selectedIndex];
+    const targetType = selectedOption ? selectedOption.getAttribute('data-type') : null;
+    
+    if (targetType) {
+        elements.propType.value = targetType;
+    }
 }
 
 // ===== Inheritance Toggle =====
@@ -1746,8 +1897,16 @@ function handleReferenceChange() {
     const isReference = elements.propIsReference.checked;
     elements.relationSection.style.display = isReference ? 'block' : 'none';
     
+    if (elements.propType) {
+        elements.propType.disabled = isReference;
+    }
+    
     if (isReference) {
         updateEntitySelectors();
+        // Si ya hay un target field seleccionado, actualizar el tipo
+        if (elements.relationTargetField && elements.relationTargetField.value) {
+            handleTargetFieldChange();
+        }
     }
 }
 
@@ -1784,6 +1943,7 @@ function resetForm() {
     if (elements.propOrder) elements.propOrder.value = 1;
     if (elements.propMaxLength) elements.propMaxLength.value = 0;
     if (elements.relationSection) elements.relationSection.style.display = 'none';
+    if (elements.propType) elements.propType.disabled = false;
     if (elements.relationTargetField) {
         elements.relationTargetField.innerHTML = '<option value="">-- Primero selecciona entidad --</option>';
     }
@@ -1801,7 +1961,6 @@ function populateForm(property) {
     if (elements.propMaxLength) elements.propMaxLength.value = property.MaxLength || 0;
     if (elements.propRequired) elements.propRequired.checked = property.Required || false;
     if (elements.propHidden) elements.propHidden.checked = property.Hidden || false;
-    if (elements.propIsHeritable) elements.propIsHeritable.checked = property.isHeritable || false;
     if (elements.propIsPrimaryKey) elements.propIsPrimaryKey.checked = property.IsPrimaryKey || false;
     if (elements.propIsUnique) elements.propIsUnique.checked = property.IsUnique || false;
     if (elements.propIsSerchable) elements.propIsSerchable.checked = property.IsSerchable || false;
@@ -1810,6 +1969,7 @@ function populateForm(property) {
     if (property.Relation) {
         if (elements.propIsReference) elements.propIsReference.checked = true;
         if (elements.relationSection) elements.relationSection.style.display = 'block';
+        if (elements.propType) elements.propType.disabled = true;
         if (elements.relationKind) elements.relationKind.value = property.Relation.Kind || 'lookup';
         if (elements.relationTargetEntity) elements.relationTargetEntity.value = property.Relation.TargetEntity || '';
         if (elements.relationLocalField) elements.relationLocalField.value = property.Relation.LocalField || '';
@@ -1824,6 +1984,7 @@ function populateForm(property) {
     } else {
         if (elements.propIsReference) elements.propIsReference.checked = false;
         if (elements.relationSection) elements.relationSection.style.display = 'none';
+        if (elements.propType) elements.propType.disabled = false;
     }
 }
 
@@ -1837,7 +1998,6 @@ function handlePropertySubmit(e) {
         Name: elements.propName ? elements.propName.value.trim() : '',
         Required: elements.propRequired ? elements.propRequired.checked : false,
         Hidden: elements.propHidden ? elements.propHidden.checked : false,
-        isHeritable: elements.propIsHeritable ? elements.propIsHeritable.checked : false,
         Order: elements.propOrder ? (parseInt(elements.propOrder.value) || 1) : 1,
         IsPrimaryKey: elements.propIsPrimaryKey ? elements.propIsPrimaryKey.checked : false,
         IsUnique: elements.propIsUnique ? elements.propIsUnique.checked : false,
@@ -1904,10 +2064,14 @@ function renderProperties() {
         return;
     }
     
+    // Ordenar propiedades por Order antes de renderizar
+    const sortedProperties = [...state.properties].sort((a, b) => a.Order - b.Order);
+    
     const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
     
     let html = '';
-    state.properties.forEach(function(prop, index) {
+    sortedProperties.forEach(function(prop, index) {
+        const actualIndex = state.properties.indexOf(prop);
         html += '<div class="property-card" data-index="' + index + '">';
         html += '<div class="property-info">';
         html += '<div class="property-order">' + prop.Order + '</div>';
@@ -1922,14 +2086,13 @@ function renderProperties() {
         if (prop.Required) html += '<span class="badge required">Required</span>';
         if (prop.IsPrimaryKey) html += '<span class="badge primary">Primary Key</span>';
         if (prop.IsUnique) html += '<span class="badge">Unique</span>';
-        if (prop.isHeritable) html += '<span class="badge">Heritable</span>';
         if (prop.Relation) html += '<span class="badge relation">Reference</span>';
         html += '</div>';
         html += '</div>';
         if (canEdit) {
             html += '<div class="property-actions">';
-            html += '<button class="btn btn-secondary btn-icon" onclick="editProperty(' + index + ')" title="Editar">✏️</button>';
-            html += '<button class="btn btn-danger btn-icon" onclick="deleteProperty(' + index + ')" title="Eliminar">🗑️</button>';
+            html += '<button class="btn btn-secondary btn-icon" onclick="editProperty(' + actualIndex + ')" title="Editar">✏️</button>';
+            html += '<button class="btn btn-danger btn-icon" onclick="deleteProperty(' + actualIndex + ')" title="Eliminar">🗑️</button>';
             html += '</div>';
         }
         html += '</div>';
