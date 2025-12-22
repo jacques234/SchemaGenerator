@@ -9,6 +9,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Mermaid for diagrams -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ 
+            startOnLoad: false,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#6366f1',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#8b5cf6',
+                lineColor: '#a0a0b8',
+                secondaryColor: '#8b5cf6',
+                tertiaryColor: '#1a1a2e',
+                background: '#1a1a2e',
+                mainBkg: '#252542',
+                textColor: '#ffffff'
+            }
+        });
+        window.mermaid = mermaid;
+    </script>
 </head>
 
 <body>
@@ -122,14 +142,14 @@
                         <button class="btn btn-secondary btn-sm" id="newSchemaBtn" title="Nuevo Schema">
                             <span>➕</span>
                         </button>
+                        <button class="btn btn-accent btn-sm" id="viewDiagramBtn" title="Ver Diagrama de Relaciones">
+                            <span>🔷</span>
+                        </button>
                         <button class="btn btn-secondary btn-sm" id="exportProjectBtn" title="Exportar todos">
                             <span>📤</span>
                         </button>
                         <button class="btn btn-secondary btn-sm" id="importProjectBtn" title="Importar">
                             <span>📥</span>
-                        </button>
-                        <button class="btn btn-warning btn-sm" id="migrateTypesBtn" title="Migrar tipos de datos">
-                            <span>🔄</span>
                         </button>
                         <input type="file" id="importFileInput" accept=".json" style="display: none;">
                     </div>
@@ -493,6 +513,49 @@
         <div class="loading-overlay" id="loadingOverlay" style="display: none;">
             <div class="loading-spinner"></div>
             <p>Cargando...</p>
+        </div>
+
+        <!-- Diagram Viewer Modal -->
+        <div class="diagram-modal" id="diagramModal" style="display: none;">
+            <div class="diagram-modal-content">
+                <div class="diagram-modal-header">
+                    <h2>🔷 Diagrama de Relaciones</h2>
+                    <div class="diagram-actions">
+                        <button class="btn btn-secondary btn-sm" id="exportMermaidBtn" title="Exportar código Mermaid">
+                            <span>💾</span> Código
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="exportDiagramBtn" title="Exportar como imagen">
+                            <span>📷</span> SVG
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="refreshDiagramBtn" title="Refrescar diagrama">
+                            <span>🔄</span> Refrescar
+                        </button>
+                        <button class="close-diagram-btn" id="closeDiagramBtn">✕</button>
+                    </div>
+                </div>
+                <div class="diagram-modal-body">
+                    <div class="diagram-info">
+                        <p>Este diagrama muestra todas las entidades y sus relaciones en el proyecto actual.</p>
+                        <div class="diagram-controls">
+                            <button class="btn-zoom" id="zoomInBtn" title="Acercar">➕</button>
+                            <button class="btn-zoom" id="zoomOutBtn" title="Alejar">➖</button>
+                            <button class="btn-zoom" id="zoomResetBtn" title="Restablecer">↺</button>
+                            <span class="zoom-level" id="zoomLevel">100%</span>
+                        </div>
+                    </div>
+                    <div class="diagram-container" id="diagramContainer">
+                        <div class="diagram-loading" id="diagramLoading">
+                            <div class="loading-spinner"></div>
+                            <p>Generando diagrama...</p>
+                        </div>
+                        <div class="diagram-content" id="diagramContent"></div>
+                        <div class="diagram-empty" id="diagramEmpty" style="display: none;">
+                            <p>No hay esquemas con relaciones para mostrar</p>
+                            <small>Crea esquemas con propiedades de tipo relación para verlos aquí</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

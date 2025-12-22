@@ -15,7 +15,11 @@ const state = {
     editIndex: -1,
     realtimeSubscription: null,
     currentSchemaId: null,  // ID del schema cargado actualmente
-    autoSaveTimeout: null   // Timeout para autoguardado
+    autoSaveTimeout: null,   // Timeout para autoguardado
+    diagramZoom: 1,
+    diagramPan: { x: 0, y: 0 },
+    diagramDragging: false,
+    diagramLastPos: { x: 0, y: 0 }
 };
 
 // ===== DOM Elements (initialized after DOM load) =====
@@ -112,10 +116,25 @@ function initializeElements() {
         savedEmptyState: document.getElementById('savedEmptyState'),
         saveSchemaBtn: document.getElementById('saveSchemaBtn'),
         newSchemaBtn: document.getElementById('newSchemaBtn'),
+        viewDiagramBtn: document.getElementById('viewDiagramBtn'),
         exportProjectBtn: document.getElementById('exportProjectBtn'),
         importProjectBtn: document.getElementById('importProjectBtn'),
         importFileInput: document.getElementById('importFileInput'),
-        migrateTypesBtn: document.getElementById('migrateTypesBtn'),
+        
+        // Diagram Modal
+        diagramModal: document.getElementById('diagramModal'),
+        diagramContainer: document.getElementById('diagramContainer'),
+        diagramContent: document.getElementById('diagramContent'),
+        diagramLoading: document.getElementById('diagramLoading'),
+        diagramEmpty: document.getElementById('diagramEmpty'),
+        closeDiagramBtn: document.getElementById('closeDiagramBtn'),
+        refreshDiagramBtn: document.getElementById('refreshDiagramBtn'),
+        exportDiagramBtn: document.getElementById('exportDiagramBtn'),
+        exportMermaidBtn: document.getElementById('exportMermaidBtn'),
+        zoomInBtn: document.getElementById('zoomInBtn'),
+        zoomOutBtn: document.getElementById('zoomOutBtn'),
+        zoomResetBtn: document.getElementById('zoomResetBtn'),
+        zoomLevel: document.getElementById('zoomLevel'),
         
         // Modal
         propertyModal: document.getElementById('propertyModal'),
@@ -280,6 +299,58 @@ function initializeEventListeners() {
         });
     }
     
+    // View diagram button
+    if (elements.viewDiagramBtn) {
+        elements.viewDiagramBtn.addEventListener('click', function() {
+            openDiagramViewer();
+        });
+    }
+    
+    // Close diagram modal
+    if (elements.closeDiagramBtn) {
+        elements.closeDiagramBtn.addEventListener('click', function() {
+            closeDiagramViewer();
+        });
+    }
+    
+    // Refresh diagram
+    if (elements.refreshDiagramBtn) {
+        elements.refreshDiagramBtn.addEventListener('click', function() {
+            renderDiagram();
+        });
+    }
+    
+    // Export diagram
+    if (elements.exportDiagramBtn) {
+        elements.exportDiagramBtn.addEventListener('click', function() {
+            exportDiagram();
+        });
+    }
+    
+    // Export mermaid code
+    if (elements.exportMermaidBtn) {
+        elements.exportMermaidBtn.addEventListener('click', function() {
+            exportMermaidCode();
+        });
+    }
+    
+    // Zoom controls
+    if (elements.zoomInBtn) {
+        elements.zoomInBtn.addEventListener('click', function() {
+            zoomDiagram(0.5);
+        });
+    }
+    if (elements.zoomOutBtn) {
+        elements.zoomOutBtn.addEventListener('click', function() {
+            zoomDiagram(-0.5);
+        });
+    }
+    if (elements.zoomResetBtn) {
+        elements.zoomResetBtn.addEventListener('click', function() {
+            resetZoom();
+        });
+    }
+    
     // Export project button
     if (elements.exportProjectBtn) {
         elements.exportProjectBtn.addEventListener('click', function() {
@@ -298,13 +369,6 @@ function initializeEventListeners() {
     if (elements.importFileInput) {
         elements.importFileInput.addEventListener('change', function(e) {
             handleImportFile(e);
-        });
-    }
-    
-    // Migrate types button
-    if (elements.migrateTypesBtn) {
-        elements.migrateTypesBtn.addEventListener('click', function() {
-            migrateDataTypes();
         });
     }
     
@@ -705,9 +769,7 @@ function applyRoleRestrictions() {
     if (elements.importProjectBtn) {
         elements.importProjectBtn.style.display = canEdit ? 'inline-flex' : 'none';
     }
-    if (elements.migrateTypesBtn) {
-        elements.migrateTypesBtn.style.display = canEdit ? 'inline-flex' : 'none';
-    }
+
     if (elements.inviteMemberBtn) {
         // Solo owner puede invitar
         elements.inviteMemberBtn.style.display = state.userRole === 'owner' ? 'inline-flex' : 'none';
@@ -869,14 +931,35 @@ async function loadProjectMembers() {
     if (!state.currentProject || !elements.projectMembersList) return;
     
     try {
-        const { data, error } = await supabaseClient
+        // Get project members
+        const { data: members, error: membersError } = await supabaseClient
             .from('project_members')
             .select('id, role, user_id, joined_at')
             .eq('project_id', state.currentProject.id);
         
-        if (error) throw error;
+        if (membersError) throw membersError;
         
-        renderProjectMembers(data || []);
+        // Get profiles for all user_ids
+        const userIds = members.map(m => m.user_id);
+        const { data: profiles, error: profilesError } = await supabaseClient
+            .from('profiles')
+            .select('id, email')
+            .in('id', userIds);
+        
+        if (profilesError) throw profilesError;
+        
+        // Map emails to members
+        const profilesMap = {};
+        profiles.forEach(p => {
+            profilesMap[p.id] = p.email;
+        });
+        
+        const membersWithEmails = members.map(m => ({
+            ...m,
+            email: profilesMap[m.user_id] || 'Usuario'
+        }));
+        
+        renderProjectMembers(membersWithEmails || []);
         
     } catch (error) {
         console.error('Error loading members:', error);
@@ -891,20 +974,74 @@ function renderProjectMembers(members) {
         return;
     }
     
+    // Check if current user is owner
+    const isOwner = state.currentProject.owner_id === state.user.id;
+    
     let html = '<div class="members-list">';
-    members.forEach(function(member) {
-        const isOwner = member.role === 'owner';
-        const roleLabel = isOwner ? '👑 Owner' : (member.role === 'editor' ? '✏️ Editor' : '👁️ Viewer');
+    
+    if (isOwner) {
+        // If owner, show all members with emails and delete option
+        // Remove duplicates by user_id (keep only the first occurrence)
+        const uniqueMembers = [];
+        const seenUserIds = new Set();
+        
+        members.forEach(function(member) {
+            if (!seenUserIds.has(member.user_id)) {
+                seenUserIds.add(member.user_id);
+                uniqueMembers.push(member);
+            }
+        });
+        
+        uniqueMembers.forEach(function(member) {
+            const isMemberOwner = member.role === 'owner';
+            const isCurrentUser = member.user_id === state.user.id;
+            const email = member.email || 'Usuario';
+            
+            // Determine role label
+            let roleLabel = '';
+            if (member.role === 'owner') {
+                roleLabel = '👑 Owner';
+            } else if (member.role === 'editor') {
+                roleLabel = '✏️ Editor';
+            } else {
+                roleLabel = '👁️ Viewer';
+            }
+            
+            html += '<div class="member-item">';
+            html += '<span class="member-email">' + email + '</span>';
+            html += '<span class="member-role">' + roleLabel + '</span>';
+            
+            // Only show remove button if it's not themselves and not owner role
+            if (!isCurrentUser && !isMemberOwner) {
+                html += '<button class="btn btn-danger btn-xs" onclick="removeMember(\'' + member.id + '\')" title="Eliminar">✕</button>';
+            }
+            html += '</div>';
+        });
+    } else {
+        // If not owner, show only current user's role
+        const currentUserMember = members.find(m => m.user_id === state.user.id);
+        
+        if (!currentUserMember) {
+            elements.projectMembersList.innerHTML = '<span class="no-members">No eres miembro</span>';
+            return;
+        }
+        
+        // Determine role label
+        let roleLabel = '';
+        if (currentUserMember.role === 'owner') {
+            roleLabel = '👑 Owner';
+        } else if (currentUserMember.role === 'editor') {
+            roleLabel = '✏️ Editor';
+        } else {
+            roleLabel = '👁️ Viewer';
+        }
         
         html += '<div class="member-item">';
         html += '<span class="member-role">' + roleLabel + '</span>';
-        if (!isOwner && state.currentProject.owner_id === state.user.id) {
-            html += '<button class="btn btn-danger btn-xs" onclick="removeMember(\'' + member.id + '\')" title="Eliminar">✕</button>';
-        }
         html += '</div>';
-    });
-    html += '</div>';
+    }
     
+    html += '</div>';
     elements.projectMembersList.innerHTML = html;
 }
 
@@ -1389,11 +1526,11 @@ function renderSavedSchemas() {
         
         html += '<div class="saved-schema-card" data-id="' + schema.id + '">';
         html += '<div class="schema-info">';
-        html += '<h4>' + schema.entity + '</h4>';
+        html += '<h4 title="' + schema.entity + '">' + schema.entity + '</h4>';
         html += '<span class="schema-meta">';
         html += 'v' + (schema.version || 1) + ' • ' + propCount + ' propiedades';
         if (isBase) html += ' <span class="badge">Base</span>';
-        if (extendsFrom) html += ' <span class="badge">extends: ' + extendsFrom + '</span>';
+        if (extendsFrom) html += ' <span class="badge" title="Extiende de: ' + extendsFrom + '">extends: ' + extendsFrom + '</span>';
         html += '</span>';
         html += '</div>';
         html += '<div class="schema-actions">';
@@ -1504,129 +1641,6 @@ function filterSchemas() {
             card.style.display = 'none';
         }
     });
-}
-
-// ===== Migrate Data Types =====
-async function migrateDataTypes() {
-    if (!state.currentProject || state.savedSchemas.length === 0) {
-        showToast('No hay schemas para migrar', 'error');
-        return;
-    }
-    
-    const canEdit = state.userRole === 'owner' || state.userRole === 'editor';
-    if (!canEdit) {
-        showToast('No tienes permisos para migrar tipos', 'error');
-        return;
-    }
-    
-    const confirmMsg = `¿Deseas migrar los tipos de datos de todos los schemas del proyecto?
-
-Esto actualizará los tipos antiguos a los nuevos tipos:
-- uuid/guid → id
-- string → text
-- int/int32/int64/long/integer → number
-- float/double/number → decimal
-- boolean → bool
-- date/datetime/date-time/datetimeoffset → date
-
-Total de schemas: ${state.savedSchemas.length}`;
-    
-    if (!confirm(confirmMsg)) return;
-    
-    showLoading();
-    
-    try {
-        const typeMapping = {
-            // IDs
-            'uuid': 'id',
-            'guid': 'id',
-            
-            // Strings
-            'string': 'text',
-            
-            // Numbers (integers)
-            'int': 'number',
-            'int32': 'number',
-            'int64': 'number',
-            'long': 'number',
-            'integer': 'number',
-            
-            // Numbers (decimals)
-            'float': 'decimal',
-            'double': 'decimal',
-            'number': 'decimal',
-            
-            // Booleans
-            'boolean': 'bool',
-            
-            // Dates
-            'date': 'date',
-            'datetime': 'date',
-            'date-time': 'date',
-            'datetimeoffset': 'date'
-        };
-        
-        let migratedCount = 0;
-        let propertiesUpdated = 0;
-        
-        for (const schema of state.savedSchemas) {
-            let schemaModified = false;
-            const updatedProperties = {};
-            
-            if (schema.properties) {
-                Object.entries(schema.properties).forEach(([key, prop]) => {
-                    const oldType = prop.Type;
-                    const newType = typeMapping[oldType] || oldType;
-                    
-                    if (newType !== oldType) {
-                        propertiesUpdated++;
-                        schemaModified = true;
-                    }
-                    
-                    updatedProperties[key] = {
-                        ...prop,
-                        Type: newType
-                    };
-                });
-            }
-            
-            if (schemaModified) {
-                // Actualizar en la base de datos
-                const { error } = await supabaseClient
-                    .from('schemas')
-                    .update({
-                        properties: updatedProperties,
-                        updated_by: state.user.id
-                    })
-                    .eq('id', schema.id);
-                
-                if (error) throw error;
-                migratedCount++;
-            }
-        }
-        
-        hideLoading();
-        
-        if (migratedCount > 0) {
-            showToast(`Migración completada: ${migratedCount} schemas actualizados, ${propertiesUpdated} propiedades modificadas`);
-            await loadSchemas();
-            
-            // Si el schema actual fue modificado, recargarlo
-            if (state.currentSchemaId) {
-                const currentSchema = state.savedSchemas.find(s => s.id === state.currentSchemaId);
-                if (currentSchema) {
-                    loadSchema(state.currentSchemaId);
-                }
-            }
-        } else {
-            showToast('No se encontraron tipos para migrar');
-        }
-        
-    } catch (error) {
-        hideLoading();
-        console.error('Error migrando tipos:', error);
-        showToast('Error al migrar tipos: ' + error.message, 'error');
-    }
 }
 
 // ===== Export Project =====
@@ -2322,7 +2336,420 @@ function showToast(message, type) {
     }
 }
 
-// ===== Loading Overlay =====
+// ===== Diagram Viewer Functions =====
+
+/**
+ * Opens the diagram viewer modal
+ */
+function openDiagramViewer() {
+    if (!elements.diagramModal) return;
+    
+    // Reset zoom and pan
+    state.diagramZoom = 1;
+    state.diagramPan = { x: 0, y: 0 };
+    
+    elements.diagramModal.style.display = 'flex';
+    renderDiagram();
+    
+    // Setup pan and zoom after a short delay to ensure diagram is rendered
+    setTimeout(setupDiagramInteraction, 100);
+}
+
+/**
+ * Closes the diagram viewer modal
+ */
+function closeDiagramViewer() {
+    if (!elements.diagramModal) return;
+    elements.diagramModal.style.display = 'none';
+}
+
+/**
+ * Generates Mermaid diagram syntax from saved schemas
+ */
+function generateMermaidDiagram() {
+    if (!state.savedSchemas || state.savedSchemas.length === 0) {
+        return null;
+    }
+    
+    let mermaidCode = 'erDiagram\n';
+    const relationships = [];
+    const entities = new Set();
+    
+    // Mapa de tipos de datos a tipos más simples para Mermaid
+    const typeMap = {
+        'Int': 'int',
+        'Integer': 'int',
+        'String': 'string',
+        'Text': 'text',
+        'Boolean': 'boolean',
+        'Bool': 'boolean',
+        'DateTime': 'datetime',
+        'Date': 'date',
+        'Time': 'time',
+        'Float': 'float',
+        'Double': 'double',
+        'Decimal': 'decimal',
+        'UUID': 'uuid',
+        'Json': 'json',
+        'Array': 'array',
+        'Object': 'object',
+        'Email': 'email',
+        'Url': 'url',
+        'Phone': 'phone',
+        'Relation': 'relation'
+    };
+    
+    // Process each schema
+    state.savedSchemas.forEach(schema => {
+        const entityName = schema.entity || 'Unknown';
+        entities.add(entityName);
+        
+        // Add entity with attributes
+        const props = schema.properties || {};
+        const propKeys = Object.keys(props);
+        
+        if (propKeys.length > 0) {
+            mermaidCode += `    ${entityName} {\n`;
+            
+            propKeys.forEach(key => {
+                const prop = props[key];
+                // Usar Type con mayúscula (la estructura real)
+                const rawType = prop.Type || prop.type || 'String';
+                const type = typeMap[rawType] || rawType.toLowerCase();
+                const isPK = prop.IsPrimaryKey ? ' PK' : '';
+                const isFK = prop.Relation ? ' FK' : '';
+                
+                // En Mermaid ER, la sintaxis es: type name [PK|FK]
+                // No se pueden agregar múltiples comentarios
+                mermaidCode += `        ${type} ${key}${isPK}${isFK}\n`;
+            });
+            
+            mermaidCode += `    }\n`;
+        }
+        
+        // Collect relationships from Relation property
+        propKeys.forEach(key => {
+            const prop = props[key];
+            // Buscar Relation con mayúscula (estructura real)
+            const relation = prop.Relation || prop.relation;
+            
+            if (relation) {
+                const targetEntity = relation.TargetEntity || relation.targetEntity;
+                if (targetEntity) {
+                    entities.add(targetEntity);
+                    
+                    // Determine cardinality for mermaid
+                    let cardinalitySymbol = '||--||'; // default: one to one
+                    const cardinality = relation.Cardinality || relation.cardinality;
+                    const kind = relation.Kind || relation.kind || key;
+                    
+                    if (cardinality === 'one-to-many' || cardinality === '1:N') {
+                        cardinalitySymbol = '||--o{';
+                    } else if (cardinality === 'many-to-one' || cardinality === 'N:1') {
+                        cardinalitySymbol = '}o--||';
+                    } else if (cardinality === 'many-to-many' || cardinality === 'N:M') {
+                        cardinalitySymbol = '}o--o{';
+                    } else if (cardinality === 'one-to-one' || cardinality === '1:1') {
+                        cardinalitySymbol = '||--||';
+                    }
+                    
+                    relationships.push({
+                        from: entityName,
+                        to: targetEntity,
+                        cardinality: cardinalitySymbol,
+                        label: kind
+                    });
+                }
+            }
+        });
+        
+        // Check for inheritance (extends)
+        const inheritance = schema.inheritance || {};
+        const extendsFrom = inheritance.extends || schema.extends;
+        
+        if (extendsFrom && extendsFrom !== '') {
+            entities.add(extendsFrom);
+            relationships.push({
+                from: entityName,
+                to: extendsFrom,
+                cardinality: '||--||',
+                label: 'extends'
+            });
+        }
+    });
+    
+    // Add relationships
+    relationships.forEach(rel => {
+        mermaidCode += `    ${rel.from} ${rel.cardinality} ${rel.to} : "${rel.label}"\n`;
+    });
+    
+    console.log('Generated Mermaid code:', mermaidCode);
+    
+    return mermaidCode;
+}
+
+/**
+ * Renders the diagram using Mermaid
+ */
+async function renderDiagram() {
+    if (!elements.diagramContent || !elements.diagramLoading || !elements.diagramEmpty) {
+        console.error('Missing required DOM elements for diagram');
+        return;
+    }
+    
+    console.log('Starting diagram render...');
+    console.log('Saved schemas count:', state.savedSchemas?.length || 0);
+    
+    // Show loading
+    elements.diagramLoading.style.display = 'block';
+    elements.diagramContent.style.display = 'none';
+    elements.diagramEmpty.style.display = 'none';
+    
+    try {
+        const mermaidCode = generateMermaidDiagram();
+        
+        if (!mermaidCode) {
+            console.log('No mermaid code generated');
+            // No diagrams to show
+            elements.diagramLoading.style.display = 'none';
+            elements.diagramEmpty.style.display = 'block';
+            return;
+        }
+        
+        console.log('Mermaid code length:', mermaidCode.length);
+        
+        // Clear previous content
+        elements.diagramContent.innerHTML = '';
+        
+        // Create a unique ID for this diagram
+        const diagramId = 'mermaid-diagram-' + Date.now();
+        const diagramDiv = document.createElement('div');
+        diagramDiv.className = 'mermaid';
+        diagramDiv.id = diagramId;
+        diagramDiv.setAttribute('data-processed', 'false');
+        diagramDiv.textContent = mermaidCode;
+        
+        elements.diagramContent.appendChild(diagramDiv);
+        console.log('Diagram div added to DOM');
+        
+        // Render with Mermaid
+        if (!window.mermaid) {
+            throw new Error('Mermaid library not loaded');
+        }
+        
+        console.log('Running mermaid.run...');
+        const { svg } = await window.mermaid.render(diagramId + '-svg', mermaidCode);
+        
+        if (svg) {
+            diagramDiv.innerHTML = svg;
+            console.log('SVG inserted into DOM');
+            
+            // Ensure SVG is visible
+            const svgElement = diagramDiv.querySelector('svg');
+            if (svgElement) {
+                svgElement.style.maxWidth = '100%';
+                svgElement.style.height = 'auto';
+                svgElement.style.display = 'block';
+                console.log('SVG element found and styled');
+            } else {
+                console.warn('SVG element not found after render');
+            }
+        } else {
+            console.warn('No SVG returned from mermaid.render');
+        }
+        
+        // Show diagram
+        elements.diagramLoading.style.display = 'none';
+        elements.diagramContent.style.display = 'block';
+        
+        console.log('Diagram rendered successfully');
+        showToast('Diagrama generado exitosamente');
+        
+    } catch (error) {
+        console.error('Error rendering diagram:', error);
+        console.error('Error stack:', error.stack);
+        elements.diagramLoading.style.display = 'none';
+        elements.diagramEmpty.style.display = 'block';
+        
+        const errorMsg = 'Error: ' + (error.message || 'Error desconocido');
+        if (elements.diagramEmpty.querySelector('p')) {
+            elements.diagramEmpty.querySelector('p').textContent = errorMsg;
+        }
+        
+        showToast('Error al generar el diagrama', 'error');
+    }
+}
+
+/**
+ * Exports the diagram as SVG
+ */
+function exportDiagram() {
+    try {
+        const svgElement = elements.diagramContent.querySelector('svg');
+        
+        if (!svgElement) {
+            showToast('No hay diagrama para exportar', 'error');
+            return;
+        }
+        
+        // Clone the SVG to avoid modifying the original
+        const svgClone = svgElement.cloneNode(true);
+        
+        // Add white background for better visibility
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('width', '100%');
+        rect.setAttribute('height', '100%');
+        rect.setAttribute('fill', '#1a1a2e');
+        svgClone.insertBefore(rect, svgClone.firstChild);
+        
+        // Serialize SVG
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(svgClone);
+        
+        // Create blob and download
+        const blob = new Blob([svgString], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (state.currentProject?.name || 'project') + '-diagram.svg';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast('Diagrama exportado como SVG');
+    } catch (error) {
+        console.error('Error exporting diagram:', error);
+        showToast('Error al exportar el diagrama', 'error');
+    }
+}
+
+/**
+ * Exports the Mermaid diagram code
+ */
+function exportMermaidCode() {
+    try {
+        const mermaidCode = generateMermaidDiagram();
+        
+        if (!mermaidCode) {
+            showToast('No hay código para exportar', 'error');
+            return;
+        }
+        
+        // Create blob with Mermaid code
+        const blob = new Blob([mermaidCode], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (state.currentProject?.name || 'project') + '-diagram.mmd';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast('Código Mermaid exportado');
+    } catch (error) {
+        console.error('Error exporting mermaid code:', error);
+        showToast('Error al exportar el código', 'error');
+    }
+}
+
+/**
+ * Setup pan and zoom interaction for the diagram
+ */
+function setupDiagramInteraction() {
+    if (!elements.diagramContent) return;
+    
+    const content = elements.diagramContent;
+    
+    // Mouse wheel zoom
+    content.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        zoomDiagram(delta);
+    }, { passive: false });
+    
+    // Pan with mouse drag
+    content.addEventListener('mousedown', function(e) {
+        if (e.button === 0) { // Left click
+            state.diagramDragging = true;
+            state.diagramLastPos = { x: e.clientX, y: e.clientY };
+            content.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+    });
+    
+    document.addEventListener('mousemove', function(e) {
+        if (state.diagramDragging) {
+            const deltaX = e.clientX - state.diagramLastPos.x;
+            const deltaY = e.clientY - state.diagramLastPos.y;
+            
+            state.diagramPan.x += deltaX;
+            state.diagramPan.y += deltaY;
+            state.diagramLastPos = { x: e.clientX, y: e.clientY };
+            
+            applyTransform();
+        }
+    });
+    
+    document.addEventListener('mouseup', function() {
+        if (state.diagramDragging) {
+            state.diagramDragging = false;
+            if (elements.diagramContent) {
+                elements.diagramContent.style.cursor = 'grab';
+            }
+        }
+    });
+    
+    // Set initial cursor
+    content.style.cursor = 'grab';
+}
+
+/**
+ * Zoom the diagram
+ */
+function zoomDiagram(delta) {
+    state.diagramZoom = Math.max(0.1, Math.min(5, state.diagramZoom + delta));
+    applyTransform();
+    updateZoomLevel();
+}
+
+/**
+ * Reset zoom and pan
+ */
+function resetZoom() {
+    state.diagramZoom = 1;
+    state.diagramPan = { x: 0, y: 0 };
+    applyTransform();
+    updateZoomLevel();
+}
+
+/**
+ * Apply transform to diagram
+ */
+function applyTransform() {
+    if (!elements.diagramContent) return;
+    
+    const svg = elements.diagramContent.querySelector('svg');
+    if (svg) {
+        svg.style.transform = `translate(${state.diagramPan.x}px, ${state.diagramPan.y}px) scale(${state.diagramZoom})`;
+        svg.style.transformOrigin = 'center center';
+        svg.style.transition = 'transform 0.1s ease-out';
+    }
+}
+
+/**
+ * Update zoom level display
+ */
+function updateZoomLevel() {
+    if (elements.zoomLevel) {
+        elements.zoomLevel.textContent = Math.round(state.diagramZoom * 100) + '%';
+    }
+}
+
+// ===== End of Diagram Functions =====
 function showLoading(show) {
     if (elements.loadingOverlay) {
         elements.loadingOverlay.style.display = show ? 'flex' : 'none';
