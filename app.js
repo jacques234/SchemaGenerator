@@ -1975,10 +1975,7 @@ function populateForm(property) {
     if (elements.propMaxLength) elements.propMaxLength.value = property.MaxLength || 0;
     if (elements.propRequired) elements.propRequired.checked = property.Required || false;
     if (elements.propHidden) elements.propHidden.checked = property.Hidden || false;
-<<<<<<< Updated upstream
-=======
     if (elements.propIsHeritable) elements.propIsHeritable.checked = property.IsHeritable || false;
->>>>>>> Stashed changes
     if (elements.propIsPrimaryKey) elements.propIsPrimaryKey.checked = property.IsPrimaryKey || false;
     if (elements.propIsUnique) elements.propIsUnique.checked = property.IsUnique || false;
     if (elements.propIsSerchable) elements.propIsSerchable.checked = property.IsSerchable || false;
@@ -2016,10 +2013,7 @@ function handlePropertySubmit(e) {
         Name: elements.propName ? elements.propName.value.trim() : '',
         Required: elements.propRequired ? elements.propRequired.checked : false,
         Hidden: elements.propHidden ? elements.propHidden.checked : false,
-<<<<<<< Updated upstream
-=======
         IsHeritable: elements.propIsHeritable ? elements.propIsHeritable.checked : false,
->>>>>>> Stashed changes
         Order: elements.propOrder ? (parseInt(elements.propOrder.value) || 1) : 1,
         IsPrimaryKey: elements.propIsPrimaryKey ? elements.propIsPrimaryKey.checked : false,
         IsUnique: elements.propIsUnique ? elements.propIsUnique.checked : false,
@@ -2108,10 +2102,7 @@ function renderProperties() {
         if (prop.Required) html += '<span class="badge required">Required</span>';
         if (prop.IsPrimaryKey) html += '<span class="badge primary">Primary Key</span>';
         if (prop.IsUnique) html += '<span class="badge">Unique</span>';
-<<<<<<< Updated upstream
-=======
         if (prop.IsHeritable) html += '<span class="badge">Heritable</span>';
->>>>>>> Stashed changes
         if (prop.Relation) html += '<span class="badge relation">Reference</span>';
         html += '</div>';
         html += '</div>';
