@@ -9,6 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- JSZip for creating ZIP files -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <!-- Mermaid for diagrams -->
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -374,6 +376,11 @@
                                     Hidden
                                 </label>
                                 <label class="checkbox-label">
+                                    <input type="checkbox" id="propMutable">
+                                    <span class="checkmark"></span>
+                                    Mutable
+                                </label>
+                                <label class="checkbox-label">
                                     <input type="checkbox" id="propIsPrimaryKey">
                                     <span class="checkmark"></span>
                                     Is Primary Key
@@ -553,6 +560,38 @@
                             <p>No hay esquemas con relaciones para mostrar</p>
                             <small>Crea esquemas con propiedades de tipo relación para verlos aquí</small>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Options Modal -->
+        <div class="modal-overlay" id="exportModal">
+            <div class="modal modal-sm">
+                <div class="modal-header">
+                    <h3>📤 Opciones de Exportación</h3>
+                    <button class="close-btn" id="closeExportModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 1rem; color: var(--text-muted);">Selecciona cómo deseas exportar los schemas:</p>
+                    <div class="export-options">
+                        <button class="btn btn-primary btn-block export-option-btn" id="exportSingleFileBtn">
+                            <span>📄</span>
+                            <div class="export-option-text">
+                                <strong>Archivo único</strong>
+                                <small>Todos los schemas en un solo archivo JSON</small>
+                            </div>
+                        </button>
+                        <button class="btn btn-secondary btn-block export-option-btn" id="exportMultipleFilesBtn">
+                            <span>📁</span>
+                            <div class="export-option-text">
+                                <strong>Archivos individuales (ZIP)</strong>
+                                <small>Un archivo JSON por schema, comprimidos en ZIP</small>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="modal-footer" style="margin-top: 1rem;">
+                        <button type="button" class="btn btn-secondary" id="cancelExportBtn">Cancelar</button>
                     </div>
                 </div>
             </div>

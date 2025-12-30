@@ -121,6 +121,13 @@ function initializeElements() {
         importProjectBtn: document.getElementById('importProjectBtn'),
         importFileInput: document.getElementById('importFileInput'),
         
+        // Export Modal
+        exportModal: document.getElementById('exportModal'),
+        closeExportModal: document.getElementById('closeExportModal'),
+        cancelExportBtn: document.getElementById('cancelExportBtn'),
+        exportSingleFileBtn: document.getElementById('exportSingleFileBtn'),
+        exportMultipleFilesBtn: document.getElementById('exportMultipleFilesBtn'),
+        
         // Diagram Modal
         diagramModal: document.getElementById('diagramModal'),
         diagramContainer: document.getElementById('diagramContainer'),
@@ -159,6 +166,7 @@ function initializeElements() {
         propIsSerchable: document.getElementById('propIsSerchable'),
         propIsSortable: document.getElementById('propIsSortable'),
         propIsReference: document.getElementById('propIsReference'),
+        propMutable: document.getElementById('propMutable'),
         
         // Relation
         relationSection: document.getElementById('relationSection'),
@@ -354,7 +362,32 @@ function initializeEventListeners() {
     // Export project button
     if (elements.exportProjectBtn) {
         elements.exportProjectBtn.addEventListener('click', function() {
-            exportProject();
+            openExportModal();
+        });
+    }
+    
+    // Export modal controls
+    if (elements.closeExportModal) {
+        elements.closeExportModal.addEventListener('click', closeExportModal);
+    }
+    if (elements.cancelExportBtn) {
+        elements.cancelExportBtn.addEventListener('click', closeExportModal);
+    }
+    if (elements.exportModal) {
+        elements.exportModal.addEventListener('click', function(e) {
+            if (e.target === elements.exportModal) closeExportModal();
+        });
+    }
+    if (elements.exportSingleFileBtn) {
+        elements.exportSingleFileBtn.addEventListener('click', function() {
+            exportProjectSingleFile();
+            closeExportModal();
+        });
+    }
+    if (elements.exportMultipleFilesBtn) {
+        elements.exportMultipleFilesBtn.addEventListener('click', function() {
+            exportProjectMultipleFiles();
+            closeExportModal();
         });
     }
     
@@ -1371,6 +1404,7 @@ function buildPropertiesObject() {
             Name: prop.Name,
             Required: prop.Required,
             Hidden: prop.Hidden,
+            Mutable: prop.Mutable !== undefined ? prop.Mutable : false,
             isHeritable: prop.isHeritable,
             Order: prop.Order,
             IsPrimaryKey: prop.IsPrimaryKey,
@@ -1454,6 +1488,7 @@ function loadSchema(schemaId) {
             MaxLength: prop.MaxLength,
             Required: prop.Required,
             Hidden: prop.Hidden,
+            Mutable: prop.Mutable !== undefined ? prop.Mutable : false,
             isHeritable: prop.isHeritable,
             Group: prop.Group,
             Order: prop.Order,
@@ -1641,49 +1676,6 @@ function filterSchemas() {
             card.style.display = 'none';
         }
     });
-}
-
-// ===== Export Project =====
-function exportProject() {
-    if (!state.currentProject) {
-        showToast('Selecciona un proyecto primero', 'error');
-        return;
-    }
-    
-    if (state.savedSchemas.length === 0) {
-        showToast('No hay schemas para exportar', 'error');
-        return;
-    }
-    
-    // Crear objeto de exportación
-    const exportData = {
-        projectName: state.currentProject.name,
-        projectDescription: state.currentProject.description || '',
-        exportDate: new Date().toISOString(),
-        version: '1.0',
-        schemas: state.savedSchemas.map(function(schema) {
-            return {
-                entity: schema.entity,
-                version: schema.version || 1,
-                mutable: schema.mutable !== false,
-                properties: schema.properties || {},
-                inheritance: schema.inheritance || { isBase: true }
-            };
-        })
-    };
-    
-    // Descargar archivo
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = state.currentProject.name.replace(/\s+/g, '_') + '_export.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showToast('Proyecto exportado: ' + state.savedSchemas.length + ' schemas');
 }
 
 // ===== Export Single Schema =====
@@ -1975,6 +1967,7 @@ function populateForm(property) {
     if (elements.propMaxLength) elements.propMaxLength.value = property.MaxLength || 0;
     if (elements.propRequired) elements.propRequired.checked = property.Required || false;
     if (elements.propHidden) elements.propHidden.checked = property.Hidden || false;
+    if (elements.propMutable) elements.propMutable.checked = property.Mutable || false;
     if (elements.propIsPrimaryKey) elements.propIsPrimaryKey.checked = property.IsPrimaryKey || false;
     if (elements.propIsUnique) elements.propIsUnique.checked = property.IsUnique || false;
     if (elements.propIsSerchable) elements.propIsSerchable.checked = property.IsSerchable || false;
@@ -2012,6 +2005,7 @@ function handlePropertySubmit(e) {
         Name: elements.propName ? elements.propName.value.trim() : '',
         Required: elements.propRequired ? elements.propRequired.checked : false,
         Hidden: elements.propHidden ? elements.propHidden.checked : false,
+        Mutable: elements.propMutable ? elements.propMutable.checked : false,
         Order: elements.propOrder ? (parseInt(elements.propOrder.value) || 1) : 1,
         IsPrimaryKey: elements.propIsPrimaryKey ? elements.propIsPrimaryKey.checked : false,
         IsUnique: elements.propIsUnique ? elements.propIsUnique.checked : false,
@@ -2754,6 +2748,141 @@ function showLoading(show) {
     if (elements.loadingOverlay) {
         elements.loadingOverlay.style.display = show ? 'flex' : 'none';
     }
+}
+
+// ===== Export Modal Functions =====
+function openExportModal() {
+    if (!state.currentProject) {
+        showToast('Selecciona un proyecto primero', 'error');
+        return;
+    }
+    
+    if (state.savedSchemas.length === 0) {
+        showToast('No hay schemas para exportar', 'error');
+        return;
+    }
+    
+    if (elements.exportModal) {
+        elements.exportModal.classList.add('active');
+    }
+}
+
+function closeExportModal() {
+    if (elements.exportModal) {
+        elements.exportModal.classList.remove('active');
+    }
+}
+
+// ===== Export Project (Single File) =====
+function exportProjectSingleFile() {
+    if (!state.currentProject) {
+        showToast('Selecciona un proyecto primero', 'error');
+        return;
+    }
+    
+    if (state.savedSchemas.length === 0) {
+        showToast('No hay schemas para exportar', 'error');
+        return;
+    }
+    
+    // Crear objeto de exportación
+    const exportData = {
+        projectName: state.currentProject.name,
+        projectDescription: state.currentProject.description || '',
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+        schemas: state.savedSchemas.map(function(schema) {
+            return {
+                entity: schema.entity,
+                version: schema.version || 1,
+                mutable: schema.mutable !== false,
+                properties: schema.properties || {},
+                inheritance: schema.inheritance || { isBase: true }
+            };
+        })
+    };
+    
+    // Descargar archivo
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = state.currentProject.name.replace(/\s+/g, '_') + '_export.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('Proyecto exportado: ' + state.savedSchemas.length + ' schemas');
+}
+
+// ===== Export Project (Multiple Files - ZIP) =====
+async function exportProjectMultipleFiles() {
+    if (!state.currentProject) {
+        showToast('Selecciona un proyecto primero', 'error');
+        return;
+    }
+    
+    if (state.savedSchemas.length === 0) {
+        showToast('No hay schemas para exportar', 'error');
+        return;
+    }
+    
+    // Verificar que JSZip esté disponible
+    if (typeof JSZip === 'undefined') {
+        showToast('Error: Librería JSZip no disponible', 'error');
+        return;
+    }
+    
+    showLoading(true);
+    
+    try {
+        // Crear instancia de JSZip
+        const zip = new JSZip();
+        
+        // Crear carpeta con el nombre del proyecto
+        const folderName = state.currentProject.name.replace(/\s+/g, '_');
+        const folder = zip.folder(folderName);
+        
+        // Añadir cada schema como archivo JSON al ZIP
+        state.savedSchemas.forEach(function(schema) {
+            const exportData = {
+                entity: schema.entity,
+                version: schema.version || 1,
+                mutable: schema.mutable !== false,
+                properties: schema.properties || {},
+                inheritance: schema.inheritance || { isBase: true }
+            };
+            
+            const content = JSON.stringify(exportData, null, 2);
+            folder.file(schema.entity + '.json', content);
+        });
+        
+        // Generar el archivo ZIP
+        const zipBlob = await zip.generateAsync({ 
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 }
+        });
+        
+        // Descargar el archivo ZIP
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = folderName + '_schemas.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        
+        showToast('ZIP creado con ' + state.savedSchemas.length + ' schemas');
+        
+    } catch (error) {
+        console.error('Error exporting ZIP:', error);
+        showToast('Error al crear archivo ZIP: ' + error.message, 'error');
+    }
+    
+    showLoading(false);
 }
 
 // ===== Utility Functions =====
