@@ -166,7 +166,6 @@ function initializeElements() {
         propIsSerchable: document.getElementById('propIsSerchable'),
         propIsSortable: document.getElementById('propIsSortable'),
         propIsReference: document.getElementById('propIsReference'),
-        propMutable: document.getElementById('propMutable'),
         
         // Relation
         relationSection: document.getElementById('relationSection'),
@@ -484,11 +483,17 @@ function initializeEventListeners() {
         elements.mutable.addEventListener('change', generateSchema);
     }
     if (elements.extendsSelect) {
-        elements.extendsSelect.addEventListener('change', generateSchema);
+        elements.extendsSelect.addEventListener('change', function() {
+            handleExtendsSelectChange();
+            generateSchema();
+        });
     }
     if (elements.strategy) {
         elements.strategy.addEventListener('change', generateSchema);
     }
+    
+    // Inicializar estado del campo strategy
+    handleExtendsSelectChange();
     
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
@@ -1404,7 +1409,8 @@ function buildPropertiesObject() {
             Name: prop.Name,
             Required: prop.Required,
             Hidden: prop.Hidden,
-            Mutable: prop.Mutable !== undefined ? prop.Mutable : false,
+            Mutable: false,
+            IsBase: true,
             Order: prop.Order,
             IsPrimaryKey: prop.IsPrimaryKey,
             IsUnique: prop.IsUnique,
@@ -1452,6 +1458,7 @@ function createNewSchema() {
     state.currentSchemaId = null;  // Limpiar ID para crear nuevo
     
     handleIsBaseChange();
+    handleExtendsSelectChange();
     renderProperties();
     generateSchema();
     
@@ -1487,7 +1494,8 @@ function loadSchema(schemaId) {
             MaxLength: prop.MaxLength,
             Required: prop.Required,
             Hidden: prop.Hidden,
-            Mutable: prop.Mutable !== undefined ? prop.Mutable : false,
+            Mutable: false,
+            IsBase: true,
             Group: prop.Group,
             Order: prop.Order,
             IsPrimaryKey: prop.IsPrimaryKey,
@@ -1499,6 +1507,7 @@ function loadSchema(schemaId) {
     });
     
     handleIsBaseChange();
+    handleExtendsSelectChange();
     renderProperties();
     generateSchema();
     
@@ -1894,6 +1903,19 @@ function handleIsBaseChange() {
     generateSchema();
 }
 
+// ===== Extends Select Change Handler =====
+function handleExtendsSelectChange() {
+    if (!elements.strategy || !elements.extendsSelect) return;
+    
+    // Si no hay una entidad seleccionada para extender, deshabilitar y limpiar el campo de estrategia
+    if (!elements.extendsSelect.value || elements.extendsSelect.value === '') {
+        elements.strategy.disabled = true;
+        elements.strategy.value = '';
+    } else {
+        elements.strategy.disabled = false;
+    }
+}
+
 // ===== Reference Checkbox Handler =====
 function handleReferenceChange() {
     if (!elements.propIsReference || !elements.relationSection) return;
@@ -1965,7 +1987,6 @@ function populateForm(property) {
     if (elements.propMaxLength) elements.propMaxLength.value = property.MaxLength || 0;
     if (elements.propRequired) elements.propRequired.checked = property.Required || false;
     if (elements.propHidden) elements.propHidden.checked = property.Hidden || false;
-    if (elements.propMutable) elements.propMutable.checked = property.Mutable || false;
     if (elements.propIsPrimaryKey) elements.propIsPrimaryKey.checked = property.IsPrimaryKey || false;
     if (elements.propIsUnique) elements.propIsUnique.checked = property.IsUnique || false;
     if (elements.propIsSerchable) elements.propIsSerchable.checked = property.IsSerchable || false;
@@ -2003,7 +2024,8 @@ function handlePropertySubmit(e) {
         Name: elements.propName ? elements.propName.value.trim() : '',
         Required: elements.propRequired ? elements.propRequired.checked : false,
         Hidden: elements.propHidden ? elements.propHidden.checked : false,
-        Mutable: elements.propMutable ? elements.propMutable.checked : false,
+        Mutable: false,
+        IsBase: true,
         Order: elements.propOrder ? (parseInt(elements.propOrder.value) || 1) : 1,
         IsPrimaryKey: elements.propIsPrimaryKey ? elements.propIsPrimaryKey.checked : false,
         IsUnique: elements.propIsUnique ? elements.propIsUnique.checked : false,
