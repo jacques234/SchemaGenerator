@@ -1677,4 +1677,50 @@ body::before {
         transform: translateY(0);
         opacity: 1;
     }
+}/* ===== Groups Dropdown ===== */
+.groups-dropdown {
+    position: absolute;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    margin-top: 2px;
+}
+
+.groups-dropdown-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    color: var(--text-primary);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.groups-dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.groups-dropdown-item:hover {
+    background: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.groups-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.groups-dropdown::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
+
+.groups-dropdown::-webkit-scrollbar-thumb {
+    background: var(--accent-primary);
+    border-radius: var(--radius-sm);
+}
+
+.groups-dropdown::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-secondary);
 }
