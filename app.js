@@ -19,7 +19,18 @@ const state = {
     diagramZoom: 1,
     diagramPan: { x: 0, y: 0 },
     diagramDragging: false,
-    diagramLastPos: { x: 0, y: 0 }
+    diagramLastPos: { x: 0, y: 0 },
+    // Detectar si es dispositivo táctil primario (no solo capaz de touch)
+    isTouchDevice: (function() {
+        // Verificar si el puntero principal es coarse (dedos) en lugar de fine (mouse)
+        if (globalThis.matchMedia && globalThis.matchMedia('(pointer: coarse)').matches) {
+            return true;
+        }
+        // Fallback: verificar si es un dispositivo móvil o tablet por user agent
+        const userAgent = navigator.userAgent.toLowerCase();
+        return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
+    })(),
+    draggedIndex: null
 };
 
 // ===== DOM Elements (initialized after DOM load) =====
@@ -103,13 +114,13 @@ function initializeElements() {
         // Inheritance
         isBase: document.getElementById('isBase'),
         extendsSelect: document.getElementById('extendsSelect'),
-        strategy: document.getElementById('strategy'),
         extendsFields: document.querySelectorAll('.extends-fields'),
         
         // Properties
         propertiesList: document.getElementById('propertiesList'),
         emptyState: document.getElementById('emptyState'),
         addPropertyBtn: document.getElementById('addPropertyBtn'),
+        recalculateOrdersBtn: document.getElementById('recalculateOrdersBtn'),
         
         // Saved Schemas
         savedSchemasList: document.getElementById('savedSchemasList'),
@@ -164,12 +175,10 @@ function initializeElements() {
         propIsPrimaryKey: document.getElementById('propIsPrimaryKey'),
         propIsUnique: document.getElementById('propIsUnique'),
         propIsSerchable: document.getElementById('propIsSerchable'),
-        propIsSortable: document.getElementById('propIsSortable'),
         propIsReference: document.getElementById('propIsReference'),
         
         // Relation
         relationSection: document.getElementById('relationSection'),
-        relationKind: document.getElementById('relationKind'),
         relationTargetEntity: document.getElementById('relationTargetEntity'),
         relationLocalField: document.getElementById('relationLocalField'),
         relationTargetField: document.getElementById('relationTargetField'),
@@ -275,6 +284,16 @@ function initializeEventListeners() {
         elements.propIsReference.addEventListener('change', handleReferenceChange);
     }
     
+    // Primary Key checkbox
+    if (elements.propIsPrimaryKey) {
+        elements.propIsPrimaryKey.addEventListener('change', handlePrimaryKeyChange);
+    }
+    
+    // Property type change
+    if (elements.propType) {
+        elements.propType.addEventListener('change', handlePropertyTypeChange);
+    }
+    
     // Target field change
     if (elements.relationTargetField) {
         elements.relationTargetField.addEventListener('change', handleTargetFieldChange);
@@ -289,6 +308,14 @@ function initializeEventListeners() {
     if (elements.addPropertyBtn) {
         elements.addPropertyBtn.addEventListener('click', function() {
             openModal();
+        });
+    }
+    
+    // Recalculate orders button
+    if (elements.recalculateOrdersBtn) {
+        elements.recalculateOrdersBtn.addEventListener('click', function() {
+            recalculateOrders();
+            showToast('Órdenes recalculados');
         });
     }
     
@@ -484,16 +511,10 @@ function initializeEventListeners() {
     }
     if (elements.extendsSelect) {
         elements.extendsSelect.addEventListener('change', function() {
-            handleExtendsSelectChange();
+            recalculateOrders();
             generateSchema();
         });
     }
-    if (elements.strategy) {
-        elements.strategy.addEventListener('change', generateSchema);
-    }
-    
-    // Inicializar estado del campo strategy
-    handleExtendsSelectChange();
     
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
@@ -1414,8 +1435,7 @@ function buildPropertiesObject() {
             Order: prop.Order,
             IsPrimaryKey: prop.IsPrimaryKey,
             IsUnique: prop.IsUnique,
-            IsSerchable: prop.IsSerchable,
-            IsSortable: prop.IsSortable
+            IsSerchable: prop.IsSerchable
         };
         
         if (prop.Description) propObj.Description = prop.Description;
@@ -1434,12 +1454,9 @@ function buildInheritanceObject() {
     };
     
     // Ahora una entidad puede ser base y heredar al mismo tiempo
-    // Solo incluir extends y strategy si tienen valores seleccionados
+    // Solo incluir extends si tiene valor seleccionado
     if (elements.extendsSelect && elements.extendsSelect.value) {
         inheritance.extends = elements.extendsSelect.value;
-    }
-    if (elements.strategy && elements.strategy.value && elements.strategy.value !== '') {
-        inheritance.strategy = elements.strategy.value;
     }
     
     return inheritance;
@@ -1452,13 +1469,11 @@ function createNewSchema() {
     if (elements.mutable) elements.mutable.checked = true;
     if (elements.isBase) elements.isBase.checked = true;
     if (elements.extendsSelect) elements.extendsSelect.value = '';
-    if (elements.strategy) elements.strategy.value = '';
     
     state.properties = [];
     state.currentSchemaId = null;  // Limpiar ID para crear nuevo
     
     handleIsBaseChange();
-    handleExtendsSelectChange();
     renderProperties();
     generateSchema();
     
@@ -1479,13 +1494,19 @@ function loadSchema(schemaId) {
     if (elements.version) elements.version.value = schema.version || 1;
     if (elements.mutable) elements.mutable.checked = schema.mutable !== false;
     
-    // Load inheritance
+    // Load inheritance (clean legacy strategy field)
     if (elements.isBase) elements.isBase.checked = schema.inheritance?.isBase !== false;
     if (elements.extendsSelect) elements.extendsSelect.value = schema.inheritance?.extends || '';
-    if (elements.strategy) elements.strategy.value = schema.inheritance?.strategy || '';
     
-    // Load properties
+    // Load properties (clean legacy Kind field from Relation)
     state.properties = Object.entries(schema.properties || {}).map(function([key, prop]) {
+        // Clean Kind from Relation if exists
+        let cleanRelation = prop.Relation;
+        if (cleanRelation && cleanRelation.Kind !== undefined) {
+            const { Kind, ...relationWithoutKind } = cleanRelation;
+            cleanRelation = relationWithoutKind;
+        }
+        
         return {
             key: key,
             Type: prop.Type,
@@ -1501,13 +1522,11 @@ function loadSchema(schemaId) {
             IsPrimaryKey: prop.IsPrimaryKey,
             IsUnique: prop.IsUnique,
             IsSerchable: prop.IsSerchable,
-            IsSortable: prop.IsSortable,
-            Relation: prop.Relation
+            Relation: cleanRelation
         };
     });
     
     handleIsBaseChange();
-    handleExtendsSelectChange();
     renderProperties();
     generateSchema();
     
@@ -1711,12 +1730,12 @@ function exportSchema(schemaId) {
     showToast('Schema "' + schema.entity + '" exportado');
 }
 
-// ===== Import Project or Schema =====
+// ===== Import Project or Schema (supports multiple files) =====
 async function handleImportFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     
-    // Reset input para permitir reimportar el mismo archivo
+    // Reset input para permitir reimportar los mismos archivos
     e.target.value = '';
     
     if (!state.currentProject) {
@@ -1731,100 +1750,123 @@ async function handleImportFile(e) {
         return;
     }
     
-    try {
-        const text = await file.text();
-        const importData = JSON.parse(text);
-        
-        // Detectar si es un schema individual o un proyecto
-        let schemas = [];
-        let sourceName = 'archivo';
-        
-        if (importData.schemas && Array.isArray(importData.schemas)) {
-            // Es un proyecto exportado
-            schemas = importData.schemas;
-            sourceName = importData.projectName || 'proyecto';
-        } else if (importData.entity) {
-            // Es un schema individual
-            schemas = [importData];
-            sourceName = importData.entity;
-        } else {
-            showToast('Archivo inválido: formato no reconocido', 'error');
-            return;
-        }
-        
-        if (schemas.length === 0) {
-            showToast('El archivo no contiene schemas', 'error');
-            return;
-        }
-        
-        // Confirmar importación
-        const isMultiple = schemas.length > 1;
-        const msg = isMultiple 
-            ? '¿Importar ' + schemas.length + ' schemas de "' + sourceName + '"?\n\nLos schemas existentes con el mismo nombre serán actualizados.'
-            : '¿Importar schema "' + schemas[0].entity + '"?\n\nSi ya existe, será actualizado.';
-        if (!confirm(msg)) return;
-        
-        showLoading(true);
-        
-        let imported = 0;
-        let updated = 0;
-        let errors = 0;
-        
-        for (const schema of schemas) {
-            try {
-                // Verificar si ya existe
-                const existing = state.savedSchemas.find(s => s.entity === schema.entity);
-                
-                const schemaData = {
-                    project_id: state.currentProject.id,
-                    entity: schema.entity,
-                    version: schema.version || 1,
-                    mutable: schema.mutable !== false,
-                    properties: schema.properties || {},
-                    inheritance: schema.inheritance || { isBase: true },
-                    updated_by: state.user.id
-                };
-                
-                if (existing) {
-                    // Update
-                    const { error } = await supabaseClient
-                        .from('schemas')
-                        .update(schemaData)
-                        .eq('id', existing.id);
-                    
-                    if (error) throw error;
-                    updated++;
-                } else {
-                    // Insert
-                    schemaData.created_by = state.user.id;
-                    
-                    const { error } = await supabaseClient
-                        .from('schemas')
-                        .insert(schemaData);
-                    
-                    if (error) throw error;
-                    imported++;
-                }
-            } catch (err) {
-                console.error('Error importing schema:', schema.entity, err);
-                errors++;
+    // Collect all schemas from all files
+    let allSchemas = [];
+    let fileErrors = [];
+    
+    for (const file of files) {
+        try {
+            const text = await file.text();
+            const importData = JSON.parse(text);
+            
+            // Detectar si es un schema individual o un proyecto
+            if (importData.schemas && Array.isArray(importData.schemas)) {
+                // Es un proyecto exportado
+                allSchemas = allSchemas.concat(importData.schemas);
+            } else if (importData.entity) {
+                // Es un schema individual
+                allSchemas.push(importData);
+            } else {
+                fileErrors.push(file.name + ': formato no reconocido');
             }
+        } catch (error) {
+            console.error('Error parsing file:', file.name, error);
+            fileErrors.push(file.name + ': error de lectura');
         }
-        
-        await loadSchemas();
-        
-        let message = 'Importación completada: ';
-        if (imported > 0) message += imported + ' nuevos';
-        if (updated > 0) message += (imported > 0 ? ', ' : '') + updated + ' actualizados';
-        if (errors > 0) message += (imported > 0 || updated > 0 ? ', ' : '') + errors + ' errores';
-        
-        showToast(message);
-        
-    } catch (error) {
-        console.error('Error parsing import file:', error);
-        showToast('Error al leer archivo: formato inválido', 'error');
     }
     
+    if (allSchemas.length === 0) {
+        const errorMsg = fileErrors.length > 0 
+            ? 'No se encontraron schemas válidos.\n' + fileErrors.join('\n')
+            : 'Los archivos no contienen schemas';
+        showToast(errorMsg, 'error');
+        return;
+    }
+    
+    // Confirmar importación
+    const msg = files.length > 1
+        ? '¿Importar ' + allSchemas.length + ' schemas de ' + files.length + ' archivos?\n\nLos schemas existentes con el mismo nombre serán actualizados.'
+        : '¿Importar ' + allSchemas.length + ' schema(s)?\n\nLos schemas existentes serán actualizados.';
+    if (!confirm(msg)) return;
+    
+    showLoading(true);
+    
+    let imported = 0;
+    let updated = 0;
+    let errors = 0;
+    
+    for (const schema of allSchemas) {
+        try {
+            // Verificar si ya existe
+            const existing = state.savedSchemas.find(s => s.entity === schema.entity);
+            
+            // Limpiar strategy de inheritance y Kind de Relation
+            let cleanedInheritance = schema.inheritance || { isBase: true };
+            if (cleanedInheritance.strategy !== undefined) {
+                const { strategy, ...inheritanceWithoutStrategy } = cleanedInheritance;
+                cleanedInheritance = inheritanceWithoutStrategy;
+            }
+            
+            // Limpiar Kind de las propiedades con Relation e IsSortable
+            const cleanedProperties = {};
+            for (const [key, prop] of Object.entries(schema.properties || {})) {
+                const cleanedProp = { ...prop };
+                if (cleanedProp.Relation?.Kind !== undefined) {
+                    const { Kind, ...relationWithoutKind } = cleanedProp.Relation;
+                    cleanedProp.Relation = relationWithoutKind;
+                }
+                // Remover IsSortable si existe
+                if (cleanedProp.IsSortable !== undefined) {
+                    delete cleanedProp.IsSortable;
+                }
+                cleanedProperties[key] = cleanedProp;
+            }
+            
+            const schemaData = {
+                project_id: state.currentProject.id,
+                entity: schema.entity,
+                version: schema.version || 1,
+                mutable: schema.mutable !== false,
+                properties: cleanedProperties,
+                inheritance: cleanedInheritance,
+                updated_by: state.user.id
+            };
+            
+            if (existing) {
+                // Update
+                const { error } = await supabaseClient
+                    .from('schemas')
+                    .update(schemaData)
+                    .eq('id', existing.id);
+                
+                if (error) throw error;
+                updated++;
+            } else {
+                // Insert
+                schemaData.created_by = state.user.id;
+                
+                const { error } = await supabaseClient
+                    .from('schemas')
+                    .insert(schemaData);
+                
+                if (error) throw error;
+                imported++;
+            }
+        } catch (err) {
+            console.error('Error importing schema:', schema.entity, err);
+            errors++;
+        }
+    }
+    
+    await loadSchemas();
+    
+    let message = 'Importación completada: ';
+    if (imported > 0) message += imported + ' nuevos';
+    if (updated > 0) message += (imported > 0 ? ', ' : '') + updated + ' actualizados';
+    if (errors > 0) message += (imported > 0 || updated > 0 ? ', ' : '') + errors + ' errores';
+    if (fileErrors.length > 0) message += ' (' + fileErrors.length + ' archivos con errores)';
+    
+    showToast(message);
     showLoading(false);
 }
 
@@ -1903,19 +1945,6 @@ function handleIsBaseChange() {
     generateSchema();
 }
 
-// ===== Extends Select Change Handler =====
-function handleExtendsSelectChange() {
-    if (!elements.strategy || !elements.extendsSelect) return;
-    
-    // Si no hay una entidad seleccionada para extender, deshabilitar y limpiar el campo de estrategia
-    if (!elements.extendsSelect.value || elements.extendsSelect.value === '') {
-        elements.strategy.disabled = true;
-        elements.strategy.value = '';
-    } else {
-        elements.strategy.disabled = false;
-    }
-}
-
 // ===== Reference Checkbox Handler =====
 function handleReferenceChange() {
     if (!elements.propIsReference || !elements.relationSection) return;
@@ -1927,6 +1956,11 @@ function handleReferenceChange() {
         elements.propType.disabled = isReference;
     }
     
+    // Auto-marcar como Searchable si es FK
+    if (isReference && elements.propIsSerchable) {
+        elements.propIsSerchable.checked = true;
+    }
+    
     if (isReference) {
         updateEntitySelectors();
         // Si ya hay un target field seleccionado, actualizar el tipo
@@ -1934,6 +1968,188 @@ function handleReferenceChange() {
             handleTargetFieldChange();
         }
     }
+}
+
+// ===== Primary Key Checkbox Handler =====
+function handlePrimaryKeyChange() {
+    if (!elements.propIsPrimaryKey || !elements.propIsPrimaryKey.checked) return;
+    
+    // Validar que no haya otra PK
+    const editIdx = elements.editIndex ? Number.parseInt(elements.editIndex.value) : -1;
+    const hasPK = state.properties.some((prop, idx) => 
+        prop.IsPrimaryKey && idx !== editIdx
+    );
+    
+    if (hasPK) {
+        elements.propIsPrimaryKey.checked = false;
+        showToast('Solo puede haber una propiedad como Primary Key', 'error');
+        return;
+    }
+    
+    // Auto-marcar Required, Hidden y Unique
+    if (elements.propRequired) elements.propRequired.checked = true;
+    if (elements.propHidden) elements.propHidden.checked = true;
+    if (elements.propIsUnique) elements.propIsUnique.checked = true;
+}
+
+// ===== Property Type Change Handler =====
+function handlePropertyTypeChange() {
+    if (!elements.propType || !elements.propIsSerchable) return;
+    
+    // Auto-marcar Searchable para tipos específicos
+    const propType = elements.propType.value;
+    if (['id', 'number', 'decimal', 'date'].includes(propType)) {
+        elements.propIsSerchable.checked = true;
+    }
+}
+
+// ===== Calculate Next Order =====
+function calculateNextOrder() {
+    if (state.properties.length === 0) return 1;
+    
+    // Si hay herencia, obtener propiedades de la entidad padre
+    let inheritedPropsCount = 0;
+    const extendsFrom = elements.extendsSelect ? elements.extendsSelect.value : '';
+    
+    if (extendsFrom) {
+        const parentSchema = state.savedSchemas.find(s => s.entity === extendsFrom);
+        if (parentSchema?.properties) {
+            inheritedPropsCount = Object.keys(parentSchema.properties).length;
+        }
+    }
+    
+    // El siguiente orden es el máximo actual + 1
+    const maxOrder = Math.max(...state.properties.map(p => p.Order || 0));
+    return Math.max(maxOrder + 1, inheritedPropsCount + state.properties.length + 1);
+}
+
+// ===== Recalculate Orders =====
+function recalculateOrders() {
+    const extendsFrom = elements.extendsSelect ? elements.extendsSelect.value : '';
+    let startOrder = 1;
+    
+    // Si hay herencia, calcular cuántas propiedades tiene la entidad padre
+    if (extendsFrom) {
+        const parentSchema = state.savedSchemas.find(s => s.entity === extendsFrom);
+        if (parentSchema && parentSchema.properties) {
+            startOrder = Object.keys(parentSchema.properties).length + 1;
+        }
+    }
+    
+    // Reordenar propiedades secuencialmente
+    state.properties.forEach((prop, index) => {
+        prop.Order = startOrder + index;
+    });
+    
+    renderProperties();
+    generateSchema();
+}
+
+// ===== Reorder Properties =====
+function movePropertyUp(sortedIndex) {
+    if (sortedIndex === 0) return;
+    
+    // Obtener array ordenado
+    const sorted = [...state.properties].sort((a, b) => a.Order - b.Order);
+    
+    // Intercambiar posiciones en el array ordenado
+    const temp = sorted[sortedIndex];
+    sorted[sortedIndex] = sorted[sortedIndex - 1];
+    sorted[sortedIndex - 1] = temp;
+    
+    // Actualizar state.properties con el nuevo orden
+    state.properties = sorted;
+    
+    // Recalcular órdenes para mantener secuencia
+    recalculateOrders();
+    
+    showToast('Propiedad movida arriba');
+}
+
+function movePropertyDown(sortedIndex) {
+    const sorted = [...state.properties].sort((a, b) => a.Order - b.Order);
+    
+    if (sortedIndex === sorted.length - 1) return;
+    
+    // Intercambiar posiciones en el array ordenado
+    const temp = sorted[sortedIndex];
+    sorted[sortedIndex] = sorted[sortedIndex + 1];
+    sorted[sortedIndex + 1] = temp;
+    
+    // Actualizar state.properties con el nuevo orden
+    state.properties = sorted;
+    
+    // Recalcular órdenes para mantener secuencia
+    recalculateOrders();
+    
+    showToast('Propiedad movida abajo');
+}
+
+// ===== Show Groups Dropdown =====
+function showGroupsDropdown() {
+    if (!elements.propGroup) return;
+    
+    // Obtener grupos existentes
+    const groups = new Set();
+    state.properties.forEach(prop => {
+        if (prop.Group) groups.add(prop.Group);
+    });
+    
+    if (groups.size === 0) return;
+    
+    // Crear dropdown personalizado si no existe
+    let dropdown = document.getElementById('groupsDropdown');
+    if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.id = 'groupsDropdown';
+        dropdown.className = 'groups-dropdown';
+        dropdown.style.display = 'none';
+        elements.propGroup.parentElement.appendChild(dropdown);
+        
+        // Click fuera del dropdown para cerrarlo
+        document.addEventListener('click', function(e) {
+            if (!dropdown.contains(e.target) && e.target !== elements.propGroup) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }
+    
+    // Limpiar y poblar dropdown
+    dropdown.innerHTML = '';
+    const sortedGroups = Array.from(groups).sort((a, b) => a.localeCompare(b));
+    
+    sortedGroups.forEach(group => {
+        const item = document.createElement('div');
+        item.className = 'groups-dropdown-item';
+        item.textContent = group;
+        item.addEventListener('click', function() {
+            elements.propGroup.value = group;
+            dropdown.style.display = 'none';
+        });
+        dropdown.appendChild(item);
+    });
+}
+
+function handleGroupInputFocus() {
+    const dropdown = document.getElementById('groupsDropdown');
+    if (dropdown && dropdown.children.length > 0) {
+        dropdown.style.display = 'block';
+        
+        // Posicionar dropdown debajo del input
+        dropdown.style.top = elements.propGroup.offsetTop + elements.propGroup.offsetHeight + 'px';
+        dropdown.style.left = elements.propGroup.offsetLeft + 'px';
+        dropdown.style.width = elements.propGroup.offsetWidth + 'px';
+    }
+}
+
+function handleGroupInputBlur(e) {
+    // Pequeño delay para permitir click en dropdown
+    setTimeout(function() {
+        const dropdown = document.getElementById('groupsDropdown');
+        if (dropdown && !dropdown.contains(document.activeElement)) {
+            dropdown.style.display = 'none';
+        }
+    }, 200);
 }
 
 // ===== Modal Functions =====
@@ -1951,7 +2167,27 @@ function openModal(index) {
     } else {
         if (elements.modalTitle) elements.modalTitle.textContent = 'Agregar Propiedad';
         resetForm();
-        if (elements.propOrder) elements.propOrder.value = state.properties.length + 1;
+        
+        // Calcular orden automáticamente
+        if (elements.propOrder) {
+            elements.propOrder.value = calculateNextOrder();
+        }
+        
+        // Auto-marcar Searchable para tipos específicos
+        const propType = elements.propType ? elements.propType.value : '';
+        if (['id', 'number', 'decimal', 'date'].includes(propType) && elements.propIsSerchable) {
+            elements.propIsSerchable.checked = true;
+        }
+    }
+    
+    // Poblar lista de grupos y configurar event listeners
+    showGroupsDropdown();
+    
+    // Agregar event listeners para el input de grupo si no existen
+    if (elements.propGroup && !elements.propGroup.dataset.listenersAdded) {
+        elements.propGroup.addEventListener('focus', handleGroupInputFocus);
+        elements.propGroup.addEventListener('blur', handleGroupInputBlur);
+        elements.propGroup.dataset.listenersAdded = 'true';
     }
     
     if (elements.propertyModal) elements.propertyModal.classList.add('active');
@@ -1990,13 +2226,11 @@ function populateForm(property) {
     if (elements.propIsPrimaryKey) elements.propIsPrimaryKey.checked = property.IsPrimaryKey || false;
     if (elements.propIsUnique) elements.propIsUnique.checked = property.IsUnique || false;
     if (elements.propIsSerchable) elements.propIsSerchable.checked = property.IsSerchable || false;
-    if (elements.propIsSortable) elements.propIsSortable.checked = property.IsSortable || false;
     
     if (property.Relation) {
         if (elements.propIsReference) elements.propIsReference.checked = true;
         if (elements.relationSection) elements.relationSection.style.display = 'block';
         if (elements.propType) elements.propType.disabled = true;
-        if (elements.relationKind) elements.relationKind.value = property.Relation.Kind || 'lookup';
         if (elements.relationTargetEntity) elements.relationTargetEntity.value = property.Relation.TargetEntity || '';
         if (elements.relationLocalField) elements.relationLocalField.value = property.Relation.LocalField || '';
         if (elements.relationCardinality) elements.relationCardinality.value = property.Relation.Cardinality || 'one-to-one';
@@ -2026,11 +2260,10 @@ function handlePropertySubmit(e) {
         Hidden: elements.propHidden ? elements.propHidden.checked : false,
         Mutable: false,
         IsBase: true,
-        Order: elements.propOrder ? (parseInt(elements.propOrder.value) || 1) : 1,
+        Order: elements.propOrder ? (Number.parseInt(elements.propOrder.value) || 1) : 1,
         IsPrimaryKey: elements.propIsPrimaryKey ? elements.propIsPrimaryKey.checked : false,
         IsUnique: elements.propIsUnique ? elements.propIsUnique.checked : false,
-        IsSerchable: elements.propIsSerchable ? elements.propIsSerchable.checked : false,
-        IsSortable: elements.propIsSortable ? elements.propIsSortable.checked : false
+        IsSerchable: elements.propIsSerchable ? elements.propIsSerchable.checked : false
     };
     
     if (elements.propDescription) {
@@ -2049,7 +2282,6 @@ function handlePropertySubmit(e) {
     }
     
     if (elements.propIsReference && elements.propIsReference.checked) {
-        const kind = elements.relationKind ? elements.relationKind.value : 'lookup';
         const targetEntity = elements.relationTargetEntity ? elements.relationTargetEntity.value : '';
         const localField = elements.relationLocalField ? elements.relationLocalField.value.trim() : '';
         const targetField = elements.relationTargetField ? elements.relationTargetField.value : '';
@@ -2057,7 +2289,6 @@ function handlePropertySubmit(e) {
         
         if (targetEntity || localField || targetField) {
             property.Relation = {
-                Kind: kind,
                 TargetEntity: targetEntity,
                 LocalField: localField,
                 TargetField: targetField,
@@ -2085,6 +2316,7 @@ function handlePropertySubmit(e) {
 
 // ===== Render Properties =====
 function renderProperties() {
+    console.log('Current state...', state);
     if (!elements.propertiesList) return;
     
     if (state.properties.length === 0) {
@@ -2100,8 +2332,15 @@ function renderProperties() {
     let html = '';
     sortedProperties.forEach(function(prop, index) {
         const actualIndex = state.properties.indexOf(prop);
-        html += '<div class="property-card" data-index="' + index + '">';
+        const draggableAttr = (!state.isTouchDevice && canEdit) ? ' draggable="true"' : '';
+        html += '<div class="property-card" data-index="' + index + '" data-actual-index="' + actualIndex + '"' + draggableAttr + '>';
         html += '<div class="property-info">';
+        
+        // Drag handle para desktop, sin handle para mobile
+        if (!state.isTouchDevice && canEdit) {
+            html += '<div class="drag-handle" title="Arrastrar para reordenar">⋮⋮</div>';
+        }
+        
         html += '<div class="property-order">' + prop.Order + '</div>';
         html += '<div class="property-details">';
         html += '<h4>' + prop.key + '</h4>';
@@ -2119,6 +2358,15 @@ function renderProperties() {
         html += '</div>';
         if (canEdit) {
             html += '<div class="property-actions">';
+            
+            // Botones de reordenamiento solo en dispositivos touch
+            if (state.isTouchDevice) {
+                html += '<div class="reorder-buttons">';
+                html += '<button class="btn btn-reorder btn-icon" onclick="movePropertyUp(' + index + ')" title="Mover arriba" ' + (index === 0 ? 'disabled' : '') + '>⬆️</button>';
+                html += '<button class="btn btn-reorder btn-icon" onclick="movePropertyDown(' + index + ')" title="Mover abajo" ' + (index === sortedProperties.length - 1 ? 'disabled' : '') + '>⬇️</button>';
+                html += '</div>';
+            }
+            
             html += '<button class="btn btn-secondary btn-icon" onclick="editProperty(' + actualIndex + ')" title="Editar">✏️</button>';
             html += '<button class="btn btn-danger btn-icon" onclick="deleteProperty(' + actualIndex + ')" title="Eliminar">🗑️</button>';
             html += '</div>';
@@ -2127,6 +2375,97 @@ function renderProperties() {
     });
     
     elements.propertiesList.innerHTML = html;
+    
+    // Agregar event listeners de drag-and-drop para desktop
+    if (!state.isTouchDevice) {
+        attachDragListeners();
+    }
+}
+
+// ===== Drag and Drop Functionality =====
+function attachDragListeners() {
+    const cards = elements.propertiesList.querySelectorAll('.property-card[draggable="true"]');
+    
+    cards.forEach(function(card) {
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragover', handleDragOver);
+        card.addEventListener('dragenter', handleDragEnter);
+        card.addEventListener('dragleave', handleDragLeave);
+        card.addEventListener('drop', handleDrop);
+        card.addEventListener('dragend', handleDragEnd);
+    });
+}
+
+function handleDragStart(e) {
+    const card = e.currentTarget;
+    state.draggedIndex = parseInt(card.getAttribute('data-index'));
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', card.innerHTML);
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    const card = e.currentTarget;
+    if (!card.classList.contains('dragging')) {
+        card.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    const card = e.currentTarget;
+    card.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation();
+    }
+    
+    const targetCard = e.currentTarget;
+    const targetIndex = parseInt(targetCard.getAttribute('data-index'));
+    
+    if (state.draggedIndex !== null && state.draggedIndex !== targetIndex) {
+        // Obtener array ordenado
+        const sorted = [...state.properties].sort((a, b) => a.Order - b.Order);
+        
+        // Remover el elemento arrastrado
+        const draggedItem = sorted.splice(state.draggedIndex, 1)[0];
+        
+        // Insertar en la nueva posición
+        sorted.splice(targetIndex, 0, draggedItem);
+        
+        // Actualizar state
+        state.properties = sorted;
+        
+        // Recalcular órdenes
+        recalculateOrders();
+        
+        showToast('Propiedad reordenada');
+    }
+    
+    targetCard.classList.remove('drag-over');
+    return false;
+}
+
+function handleDragEnd(e) {
+    const card = e.currentTarget;
+    card.classList.remove('dragging');
+    
+    // Limpiar todos los estados de drag-over
+    const allCards = elements.propertiesList.querySelectorAll('.property-card');
+    allCards.forEach(function(c) {
+        c.classList.remove('drag-over');
+    });
+    
+    state.draggedIndex = null;
 }
 
 // ===== Property Actions =====
@@ -2454,8 +2793,7 @@ function generateMermaidDiagram() {
                     
                     // Determine cardinality for mermaid
                     let cardinalitySymbol = '||--||'; // default: one to one
-                    const cardinality = relation.Cardinality || relation.cardinality;
-                    const kind = relation.Kind || relation.kind || key;
+                    const cardinality = relation.Cardinality || relation.cardinality || 'one-to-one';
                     
                     if (cardinality === 'one-to-many' || cardinality === '1:N') {
                         cardinalitySymbol = '||--o{';
@@ -2471,7 +2809,7 @@ function generateMermaidDiagram() {
                         from: entityName,
                         to: targetEntity,
                         cardinality: cardinalitySymbol,
-                        label: kind
+                        label: cardinality
                     });
                 }
             }
@@ -2497,8 +2835,6 @@ function generateMermaidDiagram() {
         mermaidCode += `    ${rel.from} ${rel.cardinality} ${rel.to} : "${rel.label}"\n`;
     });
     
-    console.log('Generated Mermaid code:', mermaidCode);
-    
     return mermaidCode;
 }
 
@@ -2510,10 +2846,6 @@ async function renderDiagram() {
         console.error('Missing required DOM elements for diagram');
         return;
     }
-    
-    console.log('Starting diagram render...');
-    console.log('Saved schemas count:', state.savedSchemas?.length || 0);
-    
     // Show loading
     elements.diagramLoading.style.display = 'block';
     elements.diagramContent.style.display = 'none';
@@ -2523,14 +2855,13 @@ async function renderDiagram() {
         const mermaidCode = generateMermaidDiagram();
         
         if (!mermaidCode) {
-            console.log('No mermaid code generated');
+            console.error('No mermaid code generated');
             // No diagrams to show
             elements.diagramLoading.style.display = 'none';
             elements.diagramEmpty.style.display = 'block';
             return;
         }
         
-        console.log('Mermaid code length:', mermaidCode.length);
         
         // Clear previous content
         elements.diagramContent.innerHTML = '';
@@ -2544,19 +2875,16 @@ async function renderDiagram() {
         diagramDiv.textContent = mermaidCode;
         
         elements.diagramContent.appendChild(diagramDiv);
-        console.log('Diagram div added to DOM');
         
         // Render with Mermaid
         if (!window.mermaid) {
             throw new Error('Mermaid library not loaded');
         }
-        
-        console.log('Running mermaid.run...');
+
         const { svg } = await window.mermaid.render(diagramId + '-svg', mermaidCode);
         
         if (svg) {
             diagramDiv.innerHTML = svg;
-            console.log('SVG inserted into DOM');
             
             // Ensure SVG is visible
             const svgElement = diagramDiv.querySelector('svg');
@@ -2564,7 +2892,6 @@ async function renderDiagram() {
                 svgElement.style.maxWidth = '100%';
                 svgElement.style.height = 'auto';
                 svgElement.style.display = 'block';
-                console.log('SVG element found and styled');
             } else {
                 console.warn('SVG element not found after render');
             }
@@ -2575,8 +2902,7 @@ async function renderDiagram() {
         // Show diagram
         elements.diagramLoading.style.display = 'none';
         elements.diagramContent.style.display = 'block';
-        
-        console.log('Diagram rendered successfully');
+
         showToast('Diagrama generado exitosamente');
         
     } catch (error) {
@@ -2905,7 +3231,7 @@ async function exportProjectMultipleFiles() {
     showLoading(false);
 }
 
-// ===== Utility Functions =====
+// ===== Utility Functions ===
 function debounce(func, wait) {
     let timeout;
     return function() {

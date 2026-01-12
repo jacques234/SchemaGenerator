@@ -147,13 +147,13 @@
                         <button class="btn btn-accent btn-sm" id="viewDiagramBtn" title="Ver Diagrama de Relaciones">
                             <span>🔷</span>
                         </button>
-                        <button class="btn btn-secondary btn-sm" id="exportProjectBtn" title="Exportar todos">
+                        <button class="btn btn-secondary btn-sm" id="exportProjectBtn" title="Exportar">
                             <span>📤</span>
                         </button>
                         <button class="btn btn-secondary btn-sm" id="importProjectBtn" title="Importar">
                             <span>📥</span>
                         </button>
-                        <input type="file" id="importFileInput" accept=".json" style="display: none;">
+                        <input type="file" id="importFileInput" accept=".json" multiple style="display: none;">
                     </div>
                 </div>
                 <div class="panel-body schemas-panel-body">
@@ -236,15 +236,6 @@
                                             <option value="">-- Seleccionar entidad --</option>
                                         </select>
                                     </div>
-                                    <div class="form-group extends-fields">
-                                        <label for="strategy">Estrategia</label>
-                                        <select id="strategy">
-                                            <option value="">-- Seleccionar estrategia --</option>
-                                            <option value="override">Override</option>
-                                            <option value="merge">Merge</option>
-                                            <option value="replace">Replace</option>
-                                        </select>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -257,9 +248,14 @@
                                 <span class="icon">📋</span>
                                 Propiedades
                             </h2>
-                            <button class="btn btn-primary" id="addPropertyBtn">
-                                <span>+</span> Agregar Propiedad
-                            </button>
+                            <div class="header-actions">
+                                <button class="btn btn-secondary btn-sm" id="recalculateOrdersBtn" title="Recalcular órdenes">
+                                    <span>🔢</span> Recalcular
+                                </button>
+                                <button class="btn btn-primary" id="addPropertyBtn">
+                                    <span>+</span> Agregar Propiedad
+                                </button>
+                            </div>
                         </div>
                         <div class="panel-body">
                             <div id="propertiesList" class="properties-list">
@@ -390,11 +386,6 @@
                                     <span class="checkmark"></span>
                                     Is Searchable
                                 </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="propIsSortable">
-                                    <span class="checkmark"></span>
-                                    Is Sortable
-                                </label>
                             </div>
                         </div>
 
@@ -402,14 +393,6 @@
                         <div class="form-section relation-section" id="relationSection" style="display: none;">
                             <h4>Relación de Referencia (ReferenceRelation)</h4>
                             <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="relationKind">Kind *</label>
-                                    <select id="relationKind">
-                                        <option value="lookup">Lookup</option>
-                                        <option value="embed">Embed</option>
-                                        <option value="link">Link</option>
-                                    </select>
-                                </div>
                                 <div class="form-group">
                                     <label for="relationTargetEntity">Target Entity *</label>
                                     <select id="relationTargetEntity">
