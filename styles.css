@@ -629,20 +629,57 @@ body::before {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    transition: var(--transition-fast);
+    transition: all 0.3s ease;
     animation: slideIn 0.3s ease;
 }
 
 .property-card:hover {
     border-color: var(--accent-primary);
     background: rgba(99, 102, 241, 0.05);
+    transform: translateX(4px);
+}
+
+.property-card.dragging {
+    opacity: 0.4;
+    border-color: var(--accent-primary);
+    transform: scale(0.98);
+}
+
+.property-card.drag-over {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.15);
+    border-style: dashed;
+    border-width: 2px;
+    transform: translateY(-2px);
 }
 
 .property-info {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1rem;
     flex: 1;
+}
+
+.drag-handle {
+    width: 24px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: var(--text-muted);
+    cursor: grab;
+    user-select: none;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.drag-handle:hover {
+    opacity: 1;
+}
+
+.property-card[draggable="true"] .drag-handle:active {
+    cursor: grabbing;
 }
 
 .property-order {
@@ -696,6 +733,35 @@ body::before {
 .property-actions {
     display: flex;
     gap: 0.5rem;
+    align-items: center;
+}
+
+.reorder-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-right: 0.5rem;
+}
+
+.btn-reorder {
+    padding: 0.25rem;
+    min-width: 28px;
+    min-height: 28px;
+    font-size: 0.875rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.btn-reorder:hover:not(:disabled) {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+}
+
+.btn-reorder:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
 /* ===== JSON Output ===== */

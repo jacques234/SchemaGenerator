@@ -19,7 +19,18 @@ const state = {
     diagramZoom: 1,
     diagramPan: { x: 0, y: 0 },
     diagramDragging: false,
-    diagramLastPos: { x: 0, y: 0 }
+    diagramLastPos: { x: 0, y: 0 },
+    // Detectar si es dispositivo táctil primario (no solo capaz de touch)
+    isTouchDevice: (function() {
+        // Verificar si el puntero principal es coarse (dedos) en lugar de fine (mouse)
+        if (globalThis.matchMedia && globalThis.matchMedia('(pointer: coarse)').matches) {
+            return true;
+        }
+        // Fallback: verificar si es un dispositivo móvil o tablet por user agent
+        const userAgent = navigator.userAgent.toLowerCase();
+        return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
+    })(),
+    draggedIndex: null
 };
 
 // ===== DOM Elements (initialized after DOM load) =====
@@ -2034,6 +2045,46 @@ function recalculateOrders() {
     generateSchema();
 }
 
+// ===== Reorder Properties =====
+function movePropertyUp(sortedIndex) {
+    if (sortedIndex === 0) return;
+    
+    // Obtener array ordenado
+    const sorted = [...state.properties].sort((a, b) => a.Order - b.Order);
+    
+    // Intercambiar posiciones en el array ordenado
+    const temp = sorted[sortedIndex];
+    sorted[sortedIndex] = sorted[sortedIndex - 1];
+    sorted[sortedIndex - 1] = temp;
+    
+    // Actualizar state.properties con el nuevo orden
+    state.properties = sorted;
+    
+    // Recalcular órdenes para mantener secuencia
+    recalculateOrders();
+    
+    showToast('Propiedad movida arriba');
+}
+
+function movePropertyDown(sortedIndex) {
+    const sorted = [...state.properties].sort((a, b) => a.Order - b.Order);
+    
+    if (sortedIndex === sorted.length - 1) return;
+    
+    // Intercambiar posiciones en el array ordenado
+    const temp = sorted[sortedIndex];
+    sorted[sortedIndex] = sorted[sortedIndex + 1];
+    sorted[sortedIndex + 1] = temp;
+    
+    // Actualizar state.properties con el nuevo orden
+    state.properties = sorted;
+    
+    // Recalcular órdenes para mantener secuencia
+    recalculateOrders();
+    
+    showToast('Propiedad movida abajo');
+}
+
 // ===== Show Groups Dropdown =====
 function showGroupsDropdown() {
     if (!elements.propGroup) return;
@@ -2265,6 +2316,7 @@ function handlePropertySubmit(e) {
 
 // ===== Render Properties =====
 function renderProperties() {
+    console.log('Current state...', state);
     if (!elements.propertiesList) return;
     
     if (state.properties.length === 0) {
@@ -2280,8 +2332,15 @@ function renderProperties() {
     let html = '';
     sortedProperties.forEach(function(prop, index) {
         const actualIndex = state.properties.indexOf(prop);
-        html += '<div class="property-card" data-index="' + index + '">';
+        const draggableAttr = (!state.isTouchDevice && canEdit) ? ' draggable="true"' : '';
+        html += '<div class="property-card" data-index="' + index + '" data-actual-index="' + actualIndex + '"' + draggableAttr + '>';
         html += '<div class="property-info">';
+        
+        // Drag handle para desktop, sin handle para mobile
+        if (!state.isTouchDevice && canEdit) {
+            html += '<div class="drag-handle" title="Arrastrar para reordenar">⋮⋮</div>';
+        }
+        
         html += '<div class="property-order">' + prop.Order + '</div>';
         html += '<div class="property-details">';
         html += '<h4>' + prop.key + '</h4>';
@@ -2299,6 +2358,15 @@ function renderProperties() {
         html += '</div>';
         if (canEdit) {
             html += '<div class="property-actions">';
+            
+            // Botones de reordenamiento solo en dispositivos touch
+            if (state.isTouchDevice) {
+                html += '<div class="reorder-buttons">';
+                html += '<button class="btn btn-reorder btn-icon" onclick="movePropertyUp(' + index + ')" title="Mover arriba" ' + (index === 0 ? 'disabled' : '') + '>⬆️</button>';
+                html += '<button class="btn btn-reorder btn-icon" onclick="movePropertyDown(' + index + ')" title="Mover abajo" ' + (index === sortedProperties.length - 1 ? 'disabled' : '') + '>⬇️</button>';
+                html += '</div>';
+            }
+            
             html += '<button class="btn btn-secondary btn-icon" onclick="editProperty(' + actualIndex + ')" title="Editar">✏️</button>';
             html += '<button class="btn btn-danger btn-icon" onclick="deleteProperty(' + actualIndex + ')" title="Eliminar">🗑️</button>';
             html += '</div>';
@@ -2307,6 +2375,97 @@ function renderProperties() {
     });
     
     elements.propertiesList.innerHTML = html;
+    
+    // Agregar event listeners de drag-and-drop para desktop
+    if (!state.isTouchDevice) {
+        attachDragListeners();
+    }
+}
+
+// ===== Drag and Drop Functionality =====
+function attachDragListeners() {
+    const cards = elements.propertiesList.querySelectorAll('.property-card[draggable="true"]');
+    
+    cards.forEach(function(card) {
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragover', handleDragOver);
+        card.addEventListener('dragenter', handleDragEnter);
+        card.addEventListener('dragleave', handleDragLeave);
+        card.addEventListener('drop', handleDrop);
+        card.addEventListener('dragend', handleDragEnd);
+    });
+}
+
+function handleDragStart(e) {
+    const card = e.currentTarget;
+    state.draggedIndex = parseInt(card.getAttribute('data-index'));
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', card.innerHTML);
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    const card = e.currentTarget;
+    if (!card.classList.contains('dragging')) {
+        card.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    const card = e.currentTarget;
+    card.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation();
+    }
+    
+    const targetCard = e.currentTarget;
+    const targetIndex = parseInt(targetCard.getAttribute('data-index'));
+    
+    if (state.draggedIndex !== null && state.draggedIndex !== targetIndex) {
+        // Obtener array ordenado
+        const sorted = [...state.properties].sort((a, b) => a.Order - b.Order);
+        
+        // Remover el elemento arrastrado
+        const draggedItem = sorted.splice(state.draggedIndex, 1)[0];
+        
+        // Insertar en la nueva posición
+        sorted.splice(targetIndex, 0, draggedItem);
+        
+        // Actualizar state
+        state.properties = sorted;
+        
+        // Recalcular órdenes
+        recalculateOrders();
+        
+        showToast('Propiedad reordenada');
+    }
+    
+    targetCard.classList.remove('drag-over');
+    return false;
+}
+
+function handleDragEnd(e) {
+    const card = e.currentTarget;
+    card.classList.remove('dragging');
+    
+    // Limpiar todos los estados de drag-over
+    const allCards = elements.propertiesList.querySelectorAll('.property-card');
+    allCards.forEach(function(c) {
+        c.classList.remove('drag-over');
+    });
+    
+    state.draggedIndex = null;
 }
 
 // ===== Property Actions =====
@@ -2676,8 +2835,6 @@ function generateMermaidDiagram() {
         mermaidCode += `    ${rel.from} ${rel.cardinality} ${rel.to} : "${rel.label}"\n`;
     });
     
-    console.log('Generated Mermaid code:', mermaidCode);
-    
     return mermaidCode;
 }
 
@@ -2689,10 +2846,6 @@ async function renderDiagram() {
         console.error('Missing required DOM elements for diagram');
         return;
     }
-    
-    console.log('Starting diagram render...');
-    console.log('Saved schemas count:', state.savedSchemas?.length || 0);
-    
     // Show loading
     elements.diagramLoading.style.display = 'block';
     elements.diagramContent.style.display = 'none';
@@ -2702,14 +2855,13 @@ async function renderDiagram() {
         const mermaidCode = generateMermaidDiagram();
         
         if (!mermaidCode) {
-            console.log('No mermaid code generated');
+            console.error('No mermaid code generated');
             // No diagrams to show
             elements.diagramLoading.style.display = 'none';
             elements.diagramEmpty.style.display = 'block';
             return;
         }
         
-        console.log('Mermaid code length:', mermaidCode.length);
         
         // Clear previous content
         elements.diagramContent.innerHTML = '';
@@ -2723,19 +2875,16 @@ async function renderDiagram() {
         diagramDiv.textContent = mermaidCode;
         
         elements.diagramContent.appendChild(diagramDiv);
-        console.log('Diagram div added to DOM');
         
         // Render with Mermaid
         if (!window.mermaid) {
             throw new Error('Mermaid library not loaded');
         }
-        
-        console.log('Running mermaid.run...');
+
         const { svg } = await window.mermaid.render(diagramId + '-svg', mermaidCode);
         
         if (svg) {
             diagramDiv.innerHTML = svg;
-            console.log('SVG inserted into DOM');
             
             // Ensure SVG is visible
             const svgElement = diagramDiv.querySelector('svg');
@@ -2743,7 +2892,6 @@ async function renderDiagram() {
                 svgElement.style.maxWidth = '100%';
                 svgElement.style.height = 'auto';
                 svgElement.style.display = 'block';
-                console.log('SVG element found and styled');
             } else {
                 console.warn('SVG element not found after render');
             }
@@ -2754,8 +2902,7 @@ async function renderDiagram() {
         // Show diagram
         elements.diagramLoading.style.display = 'none';
         elements.diagramContent.style.display = 'block';
-        
-        console.log('Diagram rendered successfully');
+
         showToast('Diagrama generado exitosamente');
         
     } catch (error) {
