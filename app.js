@@ -174,7 +174,7 @@ function initializeElements() {
         propHidden: document.getElementById('propHidden'),
         propIsPrimaryKey: document.getElementById('propIsPrimaryKey'),
         propIsUnique: document.getElementById('propIsUnique'),
-        propIsSerchable: document.getElementById('propIsSerchable'),
+        propIsSearchable: document.getElementById('propIsSearchable'),
         propIsReference: document.getElementById('propIsReference'),
         
         // Relation
@@ -1435,7 +1435,7 @@ function buildPropertiesObject() {
             Order: prop.Order,
             IsPrimaryKey: prop.IsPrimaryKey,
             IsUnique: prop.IsUnique,
-            IsSerchable: prop.IsSerchable
+            IsSearchable: prop.IsSearchable
         };
         
         if (prop.Description) propObj.Description = prop.Description;
@@ -1521,7 +1521,7 @@ function loadSchema(schemaId) {
             Order: prop.Order,
             IsPrimaryKey: prop.IsPrimaryKey,
             IsUnique: prop.IsUnique,
-            IsSerchable: prop.IsSerchable,
+            IsSearchable: prop.IsSearchable,
             Relation: cleanRelation
         };
     });
@@ -1957,8 +1957,8 @@ function handleReferenceChange() {
     }
     
     // Auto-marcar como Searchable si es FK
-    if (isReference && elements.propIsSerchable) {
-        elements.propIsSerchable.checked = true;
+    if (isReference && elements.propIsSearchable) {
+        elements.propIsSearchable.checked = true;
     }
     
     if (isReference) {
@@ -1994,12 +1994,12 @@ function handlePrimaryKeyChange() {
 
 // ===== Property Type Change Handler =====
 function handlePropertyTypeChange() {
-    if (!elements.propType || !elements.propIsSerchable) return;
+    if (!elements.propType || !elements.propIsSearchable) return;
     
     // Auto-marcar Searchable para tipos específicos
     const propType = elements.propType.value;
     if (['id', 'number', 'decimal', 'date'].includes(propType)) {
-        elements.propIsSerchable.checked = true;
+        elements.propIsSearchable.checked = true;
     }
 }
 
@@ -2175,8 +2175,8 @@ function openModal(index) {
         
         // Auto-marcar Searchable para tipos específicos
         const propType = elements.propType ? elements.propType.value : '';
-        if (['id', 'number', 'decimal', 'date'].includes(propType) && elements.propIsSerchable) {
-            elements.propIsSerchable.checked = true;
+        if (['id', 'number', 'decimal', 'date'].includes(propType) && elements.propIsSearchable) {
+            elements.propIsSearchable.checked = true;
         }
     }
     
@@ -2225,7 +2225,7 @@ function populateForm(property) {
     if (elements.propHidden) elements.propHidden.checked = property.Hidden || false;
     if (elements.propIsPrimaryKey) elements.propIsPrimaryKey.checked = property.IsPrimaryKey || false;
     if (elements.propIsUnique) elements.propIsUnique.checked = property.IsUnique || false;
-    if (elements.propIsSerchable) elements.propIsSerchable.checked = property.IsSerchable || false;
+    if (elements.propIsSearchable) elements.propIsSearchable.checked = property.IsSearchable || false;
     
     if (property.Relation) {
         if (elements.propIsReference) elements.propIsReference.checked = true;
@@ -2263,7 +2263,7 @@ function handlePropertySubmit(e) {
         Order: elements.propOrder ? (Number.parseInt(elements.propOrder.value) || 1) : 1,
         IsPrimaryKey: elements.propIsPrimaryKey ? elements.propIsPrimaryKey.checked : false,
         IsUnique: elements.propIsUnique ? elements.propIsUnique.checked : false,
-        IsSerchable: elements.propIsSerchable ? elements.propIsSerchable.checked : false
+        IsSearchable: elements.propIsSearchable ? elements.propIsSearchable.checked : false
     };
     
     if (elements.propDescription) {
