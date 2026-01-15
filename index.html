@@ -14,7 +14,7 @@
     <!-- Mermaid for diagrams -->
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ 
+        mermaid.initialize({
             startOnLoad: false,
             theme: 'dark',
             themeVariables: {
@@ -249,7 +249,8 @@
                                 Propiedades
                             </h2>
                             <div class="header-actions">
-                                <button class="btn btn-secondary btn-sm" id="recalculateOrdersBtn" title="Recalcular órdenes">
+                                <button class="btn btn-secondary btn-sm" id="recalculateOrdersBtn"
+                                    title="Recalcular órdenes">
                                     <span>🔢</span> Recalcular
                                 </button>
                                 <button class="btn btn-primary" id="addPropertyBtn">
@@ -421,6 +422,49 @@
                             </div>
                         </div>
 
+                        <!-- Validation Section -->
+                        <div class="form-section">
+                            <h4>Validación</h4>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="validationNormalize">Normalize</label>
+                                    <select id="validationNormalize">
+                                        <option value="">-- Ninguno --</option>
+                                        <option value="money">Money</option>
+                                        <option value="upper">Upper</option>
+                                        <option value="lower">Lower</option>
+                                        <option value="trim">Trim</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="validationValidator">Validator</label>
+                                    <select id="validationValidator">
+                                        <option value="">-- Ninguno --</option>
+                                        <option value="email">Email</option>
+                                        <option value="curp">CURP</option>
+                                        <option value="rfc">RFC</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="validationMinLength">Min Length</label>
+                                    <input type="number" id="validationMinLength" min="0" placeholder="ej: 5">
+                                </div>
+                                <div class="form-group">
+                                    <label for="validationPrecision">Precision</label>
+                                    <input type="number" id="validationPrecision" min="1" max="10" placeholder="ej: 4">
+                                </div>
+                                <div class="form-group">
+                                    <label for="validationMode">Mode</label>
+                                    <select id="validationMode">
+                                        <option value="">-- Ninguno --</option>
+                                        <option value="fisica">Física</option>
+                                        <option value="moral">Moral</option>
+                                        <option value="any">Any</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
                             <button type="submit" class="btn btn-primary">Guardar</button>
@@ -551,7 +595,8 @@
                     <button class="close-btn" id="closeExportModal">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p style="margin-bottom: 1rem; color: var(--text-muted);">Selecciona cómo deseas exportar los schemas:</p>
+                    <p style="margin-bottom: 1rem; color: var(--text-muted);">Selecciona cómo deseas exportar los
+                        schemas:</p>
                     <div class="export-options">
                         <button class="btn btn-primary btn-block export-option-btn" id="exportSingleFileBtn">
                             <span>📄</span>

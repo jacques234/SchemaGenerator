@@ -184,6 +184,13 @@ function initializeElements() {
         relationTargetField: document.getElementById('relationTargetField'),
         relationCardinality: document.getElementById('relationCardinality'),
         
+        // Validation
+        validationNormalize: document.getElementById('validationNormalize'),
+        validationValidator: document.getElementById('validationValidator'),
+        validationMinLength: document.getElementById('validationMinLength'),
+        validationPrecision: document.getElementById('validationPrecision'),
+        validationMode: document.getElementById('validationMode'),
+        
         // Output
         jsonOutput: document.getElementById('jsonOutput'),
         generateBtn: document.getElementById('generateBtn'),
@@ -1442,6 +1449,7 @@ function buildPropertiesObject() {
         if (prop.Group) propObj.Group = prop.Group;
         if (prop.MaxLength && prop.MaxLength > 0) propObj.MaxLength = prop.MaxLength;
         if (prop.Relation) propObj.Relation = prop.Relation;
+        if (prop.Validation) propObj.Validation = prop.Validation;
         
         props[prop.key] = propObj;
     });
@@ -1522,7 +1530,8 @@ function loadSchema(schemaId) {
             IsPrimaryKey: prop.IsPrimaryKey,
             IsUnique: prop.IsUnique,
             IsSearchable: prop.IsSearchable,
-            Relation: cleanRelation
+            Relation: cleanRelation,
+            Validation: prop.Validation
         };
     });
     
@@ -2246,6 +2255,22 @@ function populateForm(property) {
         if (elements.relationSection) elements.relationSection.style.display = 'none';
         if (elements.propType) elements.propType.disabled = false;
     }
+    
+    // Populate validation fields
+    if (property.Validation) {
+        if (elements.validationNormalize) elements.validationNormalize.value = property.Validation.Normalize || '';
+        if (elements.validationValidator) elements.validationValidator.value = property.Validation.Validator || '';
+        if (elements.validationMinLength) elements.validationMinLength.value = property.Validation.MinLength || '';
+        if (elements.validationPrecision) elements.validationPrecision.value = property.Validation.Precision || '';
+        if (elements.validationMode) elements.validationMode.value = property.Validation.Mode || '';
+    } else {
+        // Clear validation fields if no validation data
+        if (elements.validationNormalize) elements.validationNormalize.value = '';
+        if (elements.validationValidator) elements.validationValidator.value = '';
+        if (elements.validationMinLength) elements.validationMinLength.value = '';
+        if (elements.validationPrecision) elements.validationPrecision.value = '';
+        if (elements.validationMode) elements.validationMode.value = '';
+    }
 }
 
 // ===== Property Form Submit =====
@@ -2295,6 +2320,45 @@ function handlePropertySubmit(e) {
                 Cardinality: cardinality
             };
         }
+    }
+    
+    // Validation configuration
+    const validation = {};
+    let hasValidation = false;
+    
+    if (elements.validationNormalize && elements.validationNormalize.value) {
+        validation.Normalize = elements.validationNormalize.value;
+        hasValidation = true;
+    }
+    
+    if (elements.validationValidator && elements.validationValidator.value) {
+        validation.Validator = elements.validationValidator.value;
+        hasValidation = true;
+    }
+    
+    if (elements.validationMinLength) {
+        const minLength = parseInt(elements.validationMinLength.value);
+        if (minLength > 0) {
+            validation.MinLength = minLength;
+            hasValidation = true;
+        }
+    }
+    
+    if (elements.validationPrecision) {
+        const precision = parseInt(elements.validationPrecision.value);
+        if (precision >= 1 && precision <= 10) {
+            validation.Precision = precision;
+            hasValidation = true;
+        }
+    }
+    
+    if (elements.validationMode && elements.validationMode.value) {
+        validation.Mode = elements.validationMode.value;
+        hasValidation = true;
+    }
+    
+    if (hasValidation) {
+        property.Validation = validation;
     }
     
     if (state.editIndex >= 0) {
@@ -2354,6 +2418,16 @@ function renderProperties() {
         if (prop.IsPrimaryKey) html += '<span class="badge primary">Primary Key</span>';
         if (prop.IsUnique) html += '<span class="badge">Unique</span>';
         if (prop.Relation) html += '<span class="badge relation">Reference</span>';
+        
+        // Validation badges
+        if (prop.Validation) {
+            if (prop.Validation.Normalize) html += '<span class="badge" title="Normalize: ' + prop.Validation.Normalize + '">📝 ' + prop.Validation.Normalize + '</span>';
+            if (prop.Validation.Validator) html += '<span class="badge" title="Validator: ' + prop.Validation.Validator + '">✓ ' + prop.Validation.Validator + '</span>';
+            if (prop.Validation.MinLength) html += '<span class="badge" title="Min Length: ' + prop.Validation.MinLength + '">↔ ' + prop.Validation.MinLength + '</span>';
+            if (prop.Validation.Precision) html += '<span class="badge" title="Precision: ' + prop.Validation.Precision + '">⊙ ' + prop.Validation.Precision + '</span>';
+            if (prop.Validation.Mode) html += '<span class="badge" title="Mode: ' + prop.Validation.Mode + '">⚙ ' + prop.Validation.Mode + '</span>';
+        }
+        
         html += '</div>';
         html += '</div>';
         if (canEdit) {
